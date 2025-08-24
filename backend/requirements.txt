@@ -1,0 +1,48 @@
+# FastAPI核心依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 数据库依赖
+motor==3.3.2  # MongoDB异步驱动
+redis==5.0.1  # Redis客户端
+pymongo==4.6.0  # MongoDB同步驱动（用于索引等操作）
+
+# 异步任务队列
+celery==5.3.4
+kombu==5.3.4
+
+# HTTP客户端
+httpx==0.25.2
+aiohttp==3.9.1
+
+# AI服务集成
+openai==1.3.7
+
+# 工具库
+python-multipart==0.0.6  # 文件上传支持
+python-jose[cryptography]==3.3.0  # JWT支持
+passlib[bcrypt]==1.7.4  # 密码加密
+email-validator==2.1.0  # 邮箱验证
+
+# 日志和监控
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# 开发工具
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+
+# 性能分析
+pyinstrument==5.1.1
+
+# 时间处理
+python-dateutil==2.8.2
+
+# 环境变量
+python-dotenv==1.0.0
