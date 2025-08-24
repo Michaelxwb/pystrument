@@ -319,6 +319,11 @@ import * as echarts from 'echarts'
 import { analysisApi } from '@/api/analysis'
 import type { AnalysisRecord, AnalysisResults } from '@/types/analysis'
 
+// 定义组件名称
+defineOptions({
+  name: 'AIAnalysis'
+})
+
 const route = useRoute()
 const router = useRouter()
 

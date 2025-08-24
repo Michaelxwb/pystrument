@@ -244,10 +244,19 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
 import type { Project, ProjectCreate, ProjectUpdate } from '@/types/project'
+
+// 定义组件名称
+defineOptions({
+  name: 'ProjectManagement'
+})
+
+// Vue Router
+const router = useRouter()
 
 // 响应式数据
 const loading = ref(false)

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # MongoDB数据库
   mongodb:
-    image: mongo:6.0
+    image: mongo:7.0
     container_name: pystrument-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin

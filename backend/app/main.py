@@ -55,7 +55,7 @@ setup_cors(app)
 setup_response_middleware(app)
 
 # 注册API路由
-app.include_router(projects.router, prefix="/api/v1/projects", tags=["项目管理"])
+app.include_router(projects.router, prefix="/api/v1", tags=["项目管理"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["性能数据"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["AI分析"])
 
@@ -103,7 +103,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.debug,

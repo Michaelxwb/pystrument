@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 import logging
 
-from app.config.database import get_database
+from app.utils.database import get_database
 from app.models.performance import PerformanceRecord, PerformanceRecordCreate, FunctionCallDetail
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,8 @@ class PerformanceService:
     
     def __init__(self):
         self.db = get_database()
-        self.performance_collection = self.db.performance_records if self.db else None
-        self.function_calls_collection = self.db.function_calls if self.db else None
+        self.performance_collection = self.db.performance_records if self.db is not None else None
+        self.function_calls_collection = self.db.function_calls if self.db is not None else None
     
     async def save_performance_record(
         self, 
@@ -211,6 +211,131 @@ class PerformanceService:
             logger.error(f"获取性能统计失败: {str(e)}")
             raise
     
+    async def get_performance_trends(
+        self,
+        project_key: str,
+        start_time: datetime,
+        time_range: str = "24h"
+    ) -> Dict[str, Any]:
+        """获取性能趋势数据"""
+        try:
+            # 根据时间范围确定分组方式
+            if time_range in ["1h", "6h"]:
+                group_by = "minute"
+                date_format = "%Y-%m-%d %H:%M"
+                interval_minutes = 10  # 10分钟间隔
+            elif time_range == "24h":
+                group_by = "hour"
+                date_format = "%Y-%m-%d %H:00"
+                interval_minutes = 60  # 1小时间隔
+            else:  # 7d
+                group_by = "day"
+                date_format = "%Y-%m-%d"
+                interval_minutes = 1440  # 1天间隔
+            
+            # 获取响应时间趋势数据
+            response_times = await self._get_response_time_trends(
+                project_key, start_time, date_format
+            )
+            
+            # 获取接口性能分布数据
+            endpoint_stats = await self._get_endpoint_performance_stats(
+                project_key, start_time
+            )
+            
+            return {
+                "response_times": response_times,
+                "endpoint_stats": endpoint_stats,
+                "time_range": time_range,
+                "period": f"{start_time.isoformat()} - {datetime.utcnow().isoformat()}"
+            }
+            
+        except Exception as e:
+            logger.error(f"获取性能趋势数据失败: {str(e)}")
+            raise
+    
+    async def _get_response_time_trends(
+        self,
+        project_key: str,
+        start_time: datetime,
+        date_format: str
+    ) -> List[Dict[str, Any]]:
+        """获取响应时间趋势数据"""
+        pipeline = [
+            {
+                "$match": {
+                    "project_key": project_key,
+                    "timestamp": {"$gte": start_time}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": date_format,
+                            "date": "$timestamp"
+                        }
+                    },
+                    "avg_duration": {"$avg": "$performance_metrics.total_duration"},
+                    "request_count": {"$sum": 1},
+                    "max_duration": {"$max": "$performance_metrics.total_duration"},
+                    "min_duration": {"$min": "$performance_metrics.total_duration"}
+                }
+            },
+            {"$sort": {"_id": 1}}
+        ]
+        
+        results = await self.performance_collection.aggregate(pipeline).to_list(None)
+        
+        return [
+            {
+                "time": result["_id"],
+                "avg_duration": round(result["avg_duration"], 3),
+                "request_count": result["request_count"],
+                "max_duration": round(result["max_duration"], 3),
+                "min_duration": round(result["min_duration"], 3)
+            }
+            for result in results
+        ]
+    
+    async def _get_endpoint_performance_stats(
+        self,
+        project_key: str,
+        start_time: datetime,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """获取接口性能分布数据"""
+        pipeline = [
+            {
+                "$match": {
+                    "project_key": project_key,
+                    "timestamp": {"$gte": start_time}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$request_info.path",
+                    "avg_duration": {"$avg": "$performance_metrics.total_duration"},
+                    "request_count": {"$sum": 1},
+                    "total_duration": {"$sum": "$performance_metrics.total_duration"}
+                }
+            },
+            {"$sort": {"total_duration": -1}},
+            {"$limit": limit}
+        ]
+        
+        results = await self.performance_collection.aggregate(pipeline).to_list(None)
+        
+        return [
+            {
+                "path": result["_id"],
+                "avg_duration": round(result["avg_duration"], 3),
+                "request_count": result["request_count"],
+                "total_duration": round(result["total_duration"], 3)
+            }
+            for result in results
+        ]
+
     async def get_slow_functions(
         self,
         project_key: str,

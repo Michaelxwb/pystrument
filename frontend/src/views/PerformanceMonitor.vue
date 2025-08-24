@@ -293,6 +293,11 @@ import type { PerformanceRecord } from '@/types/performance'
 import PerformanceDetails from '@/components/PerformanceDetails.vue'
 import CallTraceViewer from '@/components/CallTraceViewer.vue'
 
+// 定义组件名称
+defineOptions({
+  name: 'PerformanceMonitor'
+})
+
 const router = useRouter()
 
 // 响应式数据
@@ -382,11 +387,16 @@ const loadPerformanceData = async () => {
   
   tableLoading.value = true
   try {
+    // 过滤掉空值参数
+    const filteredParams = Object.fromEntries(
+      Object.entries(tableFilters).filter(([_, value]) => value !== '' && value != null)
+    )
+    
     const params = {
       project_key: selectedProject.value,
       page: tablePagination.page,
       size: tablePagination.size,
-      ...tableFilters
+      ...filteredParams
     }
     
     const response = await performanceApi.getPerformanceRecords(params)

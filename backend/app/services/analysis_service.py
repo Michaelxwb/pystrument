@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import logging
 
-from app.config.database import get_database
+from app.utils.database import get_database
 from app.models.analysis import AnalysisResult, AIService, AnalysisInput, AnalysisResults
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class AnalysisService:
     
     def __init__(self):
         self.db = get_database()
-        self.collection = self.db.ai_analysis_results if self.db else None
+        self.collection = self.db.ai_analysis_results if self.db is not None else None
     
     async def create_analysis_task(
         self,

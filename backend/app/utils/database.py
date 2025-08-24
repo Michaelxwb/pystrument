@@ -72,7 +72,7 @@ async def close_database():
 
 async def create_indexes():
     """创建数据库索引"""
-    if not mongodb_database:
+    if mongodb_database is None:
         return
     
     try:

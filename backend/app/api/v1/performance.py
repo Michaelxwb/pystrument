@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 
-from app.middleware.response import success_response, error_response, ErrorCode
+from app.utils.response import success_response, error_response, ErrorCode
 from app.models.performance import PerformanceRecord, PerformanceRecordCreate
 from app.services.performance_service import PerformanceService
 from app.services.project_service import ProjectService
@@ -233,6 +233,55 @@ async def get_performance_stats(
         return error_response(
             ErrorCode.SYSTEM_ERROR,
             f"获取性能统计失败: {str(e)}"
+        )
+
+
+@router.get("/trends/{project_key}", summary="获取性能趋势数据")
+async def get_performance_trends(
+    project_key: str,
+    time_range: str = Query("24h", description="时间范围: 1h/6h/24h/7d")
+):
+    """获取项目性能趋势数据，用于图表展示"""
+    try:
+        # 验证项目
+        project_service = ProjectService()
+        project = await project_service.get_project_by_key(project_key)
+        if not project:
+            return error_response(
+                ErrorCode.PROJECT_NOT_FOUND,
+                "项目不存在"
+            )
+        
+        # 计算时间范围
+        time_range_map = {
+            "1h": timedelta(hours=1),
+            "6h": timedelta(hours=6),
+            "24h": timedelta(hours=24),
+            "7d": timedelta(days=7)
+        }
+        
+        if time_range not in time_range_map:
+            return error_response(
+                ErrorCode.PARAMETER_ERROR,
+                "无效的时间范围"
+            )
+        
+        start_time = datetime.utcnow() - time_range_map[time_range]
+        
+        # 获取趋势数据
+        performance_service = PerformanceService()
+        trends = await performance_service.get_performance_trends(
+            project_key=project_key,
+            start_time=start_time,
+            time_range=time_range
+        )
+        
+        return success_response(data=trends)
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取性能趋势失败: {str(e)}"
         )
 
 

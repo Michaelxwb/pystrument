@@ -24,6 +24,40 @@ export const performanceApi = {
     }>('/v1/performance/records', params)
   },
   
+  // 获取性能记录列表（别名方法，兼容现有代码）
+  getPerformanceRecords(params?: {
+    project_key?: string
+    page?: number
+    size?: number
+    start_time?: string
+    end_time?: string
+    path?: string
+    method?: string
+    min_duration?: number
+    max_duration?: number
+    status_code?: number
+  }) {
+    return this.getRecords(params)
+  },
+  
+  // 获取性能趋势数据
+  getPerformanceTrends(projectKey: string, timeRange: string = '24h') {
+    return http.get<{
+      response_times: Array<{
+        time: string
+        avg_duration: number
+        request_count: number
+      }>
+      endpoint_stats: Array<{
+        path: string
+        avg_duration: number
+        request_count: number
+      }>
+    }>(`/v1/performance/trends/${projectKey}`, {
+      time_range: timeRange
+    })
+  },
+  
   // 获取性能记录详情
   getRecordDetail(traceId: string) {
     return http.get<PerformanceRecord>(`/v1/performance/records/${traceId}`)

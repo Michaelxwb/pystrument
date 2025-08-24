@@ -6,14 +6,14 @@ from typing import List, Optional
 from datetime import datetime
 import uuid
 
-from app.middleware.response import success_response, error_response, ErrorCode
+from app.utils.response import success_response, error_response, ErrorCode
 from app.models.project import Project, ProjectCreate, ProjectUpdate
 from app.services.project_service import ProjectService
 
 router = APIRouter()
 
 
-@router.post("/", summary="创建项目")
+@router.post("/projects", summary="创建项目")
 async def create_project(project_data: ProjectCreate):
     """创建新项目"""
     try:
@@ -36,6 +36,7 @@ async def create_project(project_data: ProjectCreate):
                 "name": project.name,
                 "description": project.description,
                 "framework": project.framework,
+                "base_url": project.base_url,
                 "status": project.status,
                 "created_at": project.created_at.isoformat()
             },
@@ -49,7 +50,7 @@ async def create_project(project_data: ProjectCreate):
         )
 
 
-@router.get("/", summary="获取项目列表")
+@router.get("/projects", summary="获取项目列表")
 async def get_projects(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页数量"),
@@ -82,6 +83,7 @@ async def get_projects(
                         "name": p.name,
                         "description": p.description,
                         "framework": p.framework,
+                        "base_url": p.base_url,
                         "status": p.status,
                         "created_at": p.created_at.isoformat(),
                         "last_activity": p.last_activity.isoformat() if p.last_activity else None
@@ -102,7 +104,7 @@ async def get_projects(
         )
 
 
-@router.get("/{project_key}", summary="获取项目详情")
+@router.get("/projects/{project_key}", summary="获取项目详情")
 async def get_project(project_key: str):
     """获取项目详情"""
     try:
@@ -121,6 +123,7 @@ async def get_project(project_key: str):
                 "name": project.name,
                 "description": project.description,
                 "framework": project.framework,
+                "base_url": project.base_url,
                 "status": project.status,
                 "config": project.config,
                 "created_at": project.created_at.isoformat(),
@@ -136,7 +139,7 @@ async def get_project(project_key: str):
         )
 
 
-@router.put("/{project_key}", summary="更新项目")
+@router.put("/projects/{project_key}", summary="更新项目")
 async def update_project(project_key: str, project_data: ProjectUpdate):
     """更新项目信息"""
     try:
@@ -168,6 +171,7 @@ async def update_project(project_key: str, project_data: ProjectUpdate):
                 "name": updated_project.name,
                 "description": updated_project.description,
                 "framework": updated_project.framework,
+                "base_url": updated_project.base_url,
                 "status": updated_project.status,
                 "config": updated_project.config,
                 "updated_at": updated_project.updated_at.isoformat()
@@ -182,7 +186,7 @@ async def update_project(project_key: str, project_data: ProjectUpdate):
         )
 
 
-@router.delete("/{project_key}", summary="删除项目")
+@router.delete("/projects/{project_key}", summary="删除项目")
 async def delete_project(project_key: str):
     """删除项目（软删除）"""
     try:
@@ -208,7 +212,7 @@ async def delete_project(project_key: str):
         )
 
 
-@router.get("/{project_key}/stats", summary="获取项目统计信息")
+@router.get("/projects/{project_key}/stats", summary="获取项目统计信息")
 async def get_project_stats(project_key: str):
     """获取项目统计信息"""
     try:

@@ -133,17 +133,6 @@ router.beforeEach((to, from, next) => {
     document.title = `${to.meta.title} - 性能分析平台`
   }
   
-  // 处理页面加载状态
-  const loadingInstance = ElLoading.service({
-    lock: true,
-    text: '页面加载中...',
-    background: 'rgba(0, 0, 0, 0.7)'
-  })
-  
-  setTimeout(() => {
-    loadingInstance.close()
-  }, 300)
-  
   next()
 })
 

@@ -27,6 +27,7 @@ class ProjectBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="项目名称")
     description: Optional[str] = Field(None, max_length=500, description="项目描述")
     framework: str = Field(..., description="技术框架")
+    base_url: Optional[str] = Field(None, description="项目基础URL")
 
 
 class ProjectCreate(ProjectBase):
@@ -39,6 +40,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="项目名称")
     description: Optional[str] = Field(None, max_length=500, description="项目描述")
     framework: Optional[str] = Field(None, description="技术框架")
+    base_url: Optional[str] = Field(None, description="项目基础URL")
     status: Optional[str] = Field(None, description="项目状态")
     config: Optional[ProjectConfig] = Field(None, description="项目配置")
 
@@ -64,6 +66,7 @@ class Project(ProjectBase):
             "name": self.name,
             "description": self.description,
             "framework": self.framework,
+            "base_url": self.base_url,
             "status": self.status,
             "config": self.config.dict(),
             "created_at": self.created_at,

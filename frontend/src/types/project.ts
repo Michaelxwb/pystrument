@@ -16,6 +16,7 @@ export interface Project {
   name: string
   description?: string
   framework: string
+  base_url?: string
   status: 'active' | 'inactive' | 'archived'
   config: ProjectConfig
   created_at: string
@@ -27,6 +28,7 @@ export interface ProjectCreate {
   name: string
   description?: string
   framework: string
+  base_url?: string
   config?: Partial<ProjectConfig>
 }
 
@@ -34,6 +36,7 @@ export interface ProjectUpdate {
   name?: string
   description?: string
   framework?: string
+  base_url?: string
   status?: 'active' | 'inactive' | 'archived'
   config?: Partial<ProjectConfig>
 }

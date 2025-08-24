@@ -1,0 +1,115 @@
+# Python Backend Specific .gitignore
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# FastAPI specific
+.fastapi/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+local_db/
+data/
+
+# Logs
+*.log
+logs/
+app.log
+uvicorn.log
+access.log
+error.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+test-results/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# pyenv
+.python-version
+
+# Profiling and performance analysis
+*.prof
+*.pstats
+profile_*.html
+profiling-results/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Local development
+local_settings.py
+local_config.py
+
+# Uploads and media files
+uploads/
+media/
+static_files/
+
+# SSL certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+
+# Migration files (if using Alembic)
+# alembic/versions/*.py
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Backup files
+*.bak
+*.backup

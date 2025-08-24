@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # 数据库配置
     mongodb_url: str = "mongodb://192.168.1.7:37017/pystrument"
     mongodb_database: str = "pystrument"
-    redis_url: str = "redis://192.168.1.7:6379/0"
+    redis_url: str = "redis://:redis123@localhost:6379/0"
     
     # AI服务配置
     openai_api_key: str = ""
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     log_file: str = "/var/log/pystrument/app.log"
     
     # Celery配置
-    celery_broker_url: str = "redis://192.168.1.7:6379/1"
-    celery_result_backend: str = "redis://192.168.1.7:6379/2"
+    celery_broker_url: str = "redis://:redis123@localhost:6379/1"
+    celery_result_backend: str = "redis://:redis123@localhost:6379/2"
     
     class Config:
         env_file = ".env"

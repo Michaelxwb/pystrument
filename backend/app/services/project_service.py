@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import logging
 
-from app.config.database import get_database
+from app.utils.database import get_database
 from app.models.project import Project, ProjectCreate, ProjectUpdate
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class ProjectService:
     
     def __init__(self):
         self.db = get_database()
-        self.collection = self.db.projects if self.db else None
+        self.collection = self.db.projects if self.db is not None else None
     
     async def create_project(self, project_data: ProjectCreate) -> Project:
         """创建新项目"""
@@ -28,6 +28,7 @@ class ProjectService:
             project = Project(
                 project_key=project_key,
                 name=project_data.name,
+                base_url=project_data.base_url,
                 description=project_data.description,
                 framework=project_data.framework,
                 config=project_data.config,
@@ -106,6 +107,8 @@ class ProjectService:
             update_data = {}
             if project_data.name is not None:
                 update_data["name"] = project_data.name
+            if project_data.base_url is not None:
+                update_data["base_url"] = project_data.base_url
             if project_data.description is not None:
                 update_data["description"] = project_data.description
             if project_data.framework is not None:
