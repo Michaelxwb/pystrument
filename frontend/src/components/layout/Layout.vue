@@ -10,8 +10,8 @@
           :default-active="$route.path"
           class="sidebar-menu"
           router
-          background-color="#304156"
-          text-color="#bfcbd9"
+          background-color="#2c3e50"
+          text-color="#ffffff"
           active-text-color="#409EFF"
         >
           <el-menu-item index="/dashboard">
@@ -105,7 +105,7 @@ const toggleSidebar = () => {
 }
 
 .sidebar-container {
-  background: #304156;
+  background: #2c3e50;
   min-height: 100vh;
   transition: width 0.28s;
   
@@ -114,12 +114,13 @@ const toggleSidebar = () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #2b3a4b;
+    background: #1a252f;
     
     h2 {
       color: #ffffff;
       font-size: 16px;
       margin: 0;
+      font-weight: 600;
     }
   }
   
@@ -131,9 +132,29 @@ const toggleSidebar = () => {
     .el-menu-item {
       height: 50px;
       line-height: 50px;
+      color: #ffffff !important;
+      
+      &:hover {
+        background-color: #34495e !important;
+        color: #ffffff !important;
+      }
       
       &.is-active {
         background-color: #409EFF !important;
+        color: #ffffff !important;
+        
+        .el-icon {
+          color: #ffffff !important;
+        }
+      }
+      
+      .el-icon {
+        color: #ffffff !important;
+        margin-right: 5px;
+      }
+      
+      span {
+        color: inherit !important;
       }
     }
   }

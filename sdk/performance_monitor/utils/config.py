@@ -60,8 +60,18 @@ class Config:
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "Config":
         """从字典创建配置"""
+        # 获取有效字段（替代使用__dataclasses_fields__）
+        valid_fields = {
+            "project_key", "api_endpoint", "enabled", "sampling_rate", 
+            "async_send", "exclude_patterns", "include_patterns", "batch_size",
+            "batch_timeout", "request_timeout", "retry_times", "retry_delay",
+            "track_sql", "track_cache", "track_memory", "track_templates",
+            "max_request_size", "max_response_size", "sdk_version",
+            "app_version", "git_commit", "deploy_time", "framework_version",
+            "log_level"
+        }
+        
         # 过滤掉不存在的字段
-        valid_fields = {f.name for f in cls.__dataclasses_fields__.values()}
         filtered_dict = {k: v for k, v in config_dict.items() if k in valid_fields}
         
         return cls(**filtered_dict)
@@ -147,11 +157,33 @@ class Config:
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        result = {}
-        for field_info in self.__dataclass_fields__.values():
-            value = getattr(self, field_info.name)
-            result[field_info.name] = value
-        return result
+        # 直接将所有属性转换为字典（避免使用__dataclass_fields__）
+        return {
+            "project_key": self.project_key,
+            "api_endpoint": self.api_endpoint,
+            "enabled": self.enabled,
+            "sampling_rate": self.sampling_rate,
+            "async_send": self.async_send,
+            "exclude_patterns": self.exclude_patterns,
+            "include_patterns": self.include_patterns,
+            "batch_size": self.batch_size,
+            "batch_timeout": self.batch_timeout,
+            "request_timeout": self.request_timeout,
+            "retry_times": self.retry_times,
+            "retry_delay": self.retry_delay,
+            "track_sql": self.track_sql,
+            "track_cache": self.track_cache,
+            "track_memory": self.track_memory,
+            "track_templates": self.track_templates,
+            "max_request_size": self.max_request_size,
+            "max_response_size": self.max_response_size,
+            "sdk_version": self.sdk_version,
+            "app_version": self.app_version,
+            "git_commit": self.git_commit,
+            "deploy_time": self.deploy_time,
+            "framework_version": self.framework_version,
+            "log_level": self.log_level
+        }
     
     def validate(self) -> bool:
         """验证配置"""

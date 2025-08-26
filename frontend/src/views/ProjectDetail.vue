@@ -11,7 +11,7 @@
 
     <el-row :gutter="20">
       <el-col :span="16">
-        <el-card>
+        <el-card v-loading="loading">
           <template #header>
             <span>项目信息</span>
           </template>
@@ -43,12 +43,21 @@
           </el-descriptions>
         </el-card>
 
-        <el-card style="margin-top: 20px;">
+        <el-card style="margin-top: 20px;" v-loading="recordsLoading">
           <template #header>
-            <span>最近性能记录</span>
+            <div class="card-header-with-actions">
+              <span>最近性能记录</span>
+              <el-button size="small" type="primary" @click="loadRecentRecords">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
           </template>
-          <el-table :data="recentRecords" style="width: 100%">
-            <el-table-column prop="path" label="请求路径" />
+          <div v-if="recentRecords.length === 0" class="empty-data">
+            暂无性能记录数据
+          </div>
+          <el-table v-else :data="recentRecords" style="width: 100%" stripe>
+            <el-table-column prop="path" label="请求路径" min-width="180" show-overflow-tooltip />
             <el-table-column prop="method" label="方法" width="80">
               <template #default="scope">
                 <el-tag size="small" :type="getMethodTagType(scope.row.method)">
@@ -63,9 +72,18 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态码" width="80" />
+            <el-table-column prop="status" label="状态码" width="80">
+              <template #default="scope">
+                <el-tag 
+                  size="small" 
+                  :type="scope.row.status >= 400 ? 'danger' : (scope.row.status >= 300 ? 'warning' : 'success')"
+                >
+                  {{ scope.row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="timestamp" label="时间" width="160" />
-            <el-table-column label="操作" width="100">
+            <el-table-column label="操作" width="100" fixed="right">
               <template #default="scope">
                 <el-button type="text" size="small" @click="viewDetail(scope.row)">
                   查看详情
@@ -73,18 +91,29 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="view-more" v-if="recentRecords.length > 0">
+            <el-button type="text" @click="router.push(`/performance?project_key=${projectKey}`)">
+              查看更多 <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
         </el-card>
       </el-col>
 
       <el-col :span="8">
-        <el-card>
+        <el-card v-loading="statsLoading">
           <template #header>
-            <span>性能统计</span>
+            <div class="card-header-with-actions">
+              <span>性能统计</span>
+              <el-button size="small" type="primary" @click="loadProjectStats">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
           </template>
           <div class="stats-container">
             <div class="stat-item">
               <div class="stat-value">{{ projectStats.totalRecords }}</div>
-              <div class="stat-label">总记录数</div>
+              <div class="stat-label">总请求数</div>
             </div>
             <div class="stat-item">
               <div class="stat-value">{{ projectStats.avgDuration }}ms</div>
@@ -99,9 +128,14 @@
               <div class="stat-label">错误率</div>
             </div>
           </div>
+          <div class="view-more">
+            <el-button type="text" @click="router.push(`/performance?project_key=${projectKey}`)">
+              查看详细统计 <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
         </el-card>
 
-        <el-card style="margin-top: 20px;">
+        <el-card style="margin-top: 20px;" v-loading="configSaving">
           <template #header>
             <span>项目配置</span>
           </template>
@@ -127,6 +161,15 @@
               <el-switch v-model="config.autoAnalysis" @change="updateConfig" />
             </div>
           </div>
+          <el-alert
+            v-if="!config.enabled"
+            type="warning"
+            :closable="false"
+            title="监控已禁用"
+            description="该项目的性能监控功能已禁用，将不会收集新的性能数据。"
+            show-icon
+            style="margin-top: 16px;"
+          />
         </el-card>
       </el-col>
     </el-row>
@@ -138,7 +181,9 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { projectApi } from '@/api/project'
+import { performanceApi } from '@/api/performance'
 import type { Project } from '@/types/project'
+import type { PerformanceRecord } from '@/types/performance'
 
 // 定义组件名称
 defineOptions({
@@ -156,6 +201,9 @@ const props = defineProps<{
 // 响应式数据
 const projectKey = ref(props.projectKey || route.params.projectKey as string)
 const loading = ref(false)
+const statsLoading = ref(false)
+const recordsLoading = ref(false)
+const configSaving = ref(false)
 
 const project = ref<Partial<Project>>({
   name: '',
@@ -170,10 +218,10 @@ const project = ref<Partial<Project>>({
 })
 
 const projectStats = ref({
-  totalRecords: 1234,
-  avgDuration: 156,
-  slowQueries: 23,
-  errorRate: 2.1
+  totalRecords: 0,
+  avgDuration: 0,
+  slowQueries: 0,
+  errorRate: 0
 })
 
 const config = ref({
@@ -182,32 +230,19 @@ const config = ref({
   autoAnalysis: false
 })
 
-const recentRecords = ref([
-  {
-    path: '/api/users',
-    method: 'GET',
-    duration: 123,
-    status: 200,
-    timestamp: '2024-01-20 15:30:00'
-  },
-  {
-    path: '/api/orders',
-    method: 'POST',
-    duration: 456,
-    status: 201,
-    timestamp: '2024-01-20 15:25:00'
-  },
-  {
-    path: '/api/products',
-    method: 'GET',
-    duration: 89,
-    status: 200,
-    timestamp: '2024-01-20 15:20:00'
-  }
-])
+const recentRecords = ref<Array<{
+  trace_id: string,
+  path: string,
+  method: string,
+  duration: number,
+  status: number,
+  timestamp: string
+}>>([])
 
 onMounted(() => {
   loadProjectData()
+  loadProjectStats()
+  loadRecentRecords()
 })
 
 const loadProjectData = async () => {
@@ -252,6 +287,99 @@ const loadProjectData = async () => {
   }
 }
 
+// 加载项目统计数据
+const loadProjectStats = async () => {
+  if (!projectKey.value) return
+  
+  statsLoading.value = true
+  try {
+    const response = await projectApi.getProjectStats(projectKey.value)
+    const stats = response.data
+    
+    projectStats.value = {
+      totalRecords: stats.total_requests || 0,
+      avgDuration: stats.avg_response_time || 0,
+      slowQueries: await getSlowQueriesCount(),
+      errorRate: stats.total_requests > 0 
+        ? ((stats.total_requests - stats.today_requests) / stats.total_requests * 100).toFixed(1)
+        : 0
+    }
+    
+    console.log('项目统计加载成功:', projectStats.value)
+  } catch (error) {
+    console.error('加载项目统计失败:', error)
+    ElMessage.warning('加载项目统计数据失败')
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// 获取慢查询数量
+const getSlowQueriesCount = async (): Promise<number> => {
+  try {
+    const response = await performanceApi.getSlowFunctions(projectKey.value, 100)
+    return response.data.slow_functions?.length || 0
+  } catch (error) {
+    console.error('获取慢查询数量失败:', error)
+    return 0
+  }
+}
+
+// 加载最近性能记录
+const loadRecentRecords = async () => {
+  if (!projectKey.value) return
+  
+  recordsLoading.value = true
+  try {
+    const response = await performanceApi.getRecords({
+      project_key: projectKey.value,
+      page: 1,
+      size: 10
+    })
+    
+    recentRecords.value = response.data.records.map(record => ({
+      trace_id: record.trace_id,
+      path: record.request_path || '',
+      method: record.request_method || 'GET',
+      duration: Math.round((record.duration || 0) * 1000), // 转为毫秒
+      status: record.status_code || 200,
+      timestamp: formatDateTime(record.timestamp)
+    }))
+    
+    console.log('最近性能记录加载成功:', recentRecords.value)
+  } catch (error) {
+    console.error('加载最近性能记录失败:', error)
+    ElMessage.warning('加载最近性能记录失败')
+  } finally {
+    recordsLoading.value = false
+  }
+}
+
+// 更新项目配置
+const updateConfig = async () => {
+  if (!projectKey.value) return
+  
+  configSaving.value = true
+  try {
+    const updateData = {
+      config: {
+        enabled: config.value.enabled,
+        sampling_rate: config.value.samplingRate,
+        auto_analysis: config.value.autoAnalysis
+      }
+    }
+    
+    await projectApi.updateProject(projectKey.value, updateData)
+    ElMessage.success('项目配置更新成功')
+    console.log('项目配置已更新:', updateData)
+  } catch (error) {
+    console.error('更新项目配置失败:', error)
+    ElMessage.error('更新项目配置失败')
+  } finally {
+    configSaving.value = false
+  }
+}
+
 const getMethodTagType = (method: string) => {
   const types: Record<string, string> = {
     'GET': 'success',
@@ -278,13 +406,9 @@ const formatDateTime = (dateString?: string) => {
 }
 
 const viewDetail = (record: any) => {
-  router.push(`/performance/${record.traceId}`)
+  router.push(`/performance/${record.trace_id}`)
 }
 
-const updateConfig = () => {
-  console.log('更新项目配置:', config.value)
-  // 这里后续接入真实API
-}
 </script>
 
 <style lang="scss" scoped>
@@ -303,6 +427,12 @@ const updateConfig = () => {
       color: #909399;
       font-size: 14px;
     }
+  }
+  
+  .card-header-with-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   
   .stats-container {
@@ -347,6 +477,18 @@ const updateConfig = () => {
         font-size: 14px;
       }
     }
+  }
+  
+  .empty-data {
+    text-align: center;
+    padding: 40px 0;
+    color: #909399;
+    font-size: 14px;
+  }
+  
+  .view-more {
+    margin-top: 16px;
+    text-align: center;
   }
   
   .text-success {

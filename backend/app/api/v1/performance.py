@@ -127,12 +127,12 @@ async def get_performance_records(
                 "records": [
                     {
                         "trace_id": record.trace_id,
-                        "request_path": record.request_info.get("path"),
-                        "request_method": record.request_info.get("method"),
-                        "duration": record.performance_metrics.get("total_duration"),
-                        "cpu_time": record.performance_metrics.get("cpu_time"),
-                        "memory_peak": record.performance_metrics.get("memory_usage", {}).get("peak_memory"),
-                        "status_code": record.response_info.get("status_code"),
+                        "request_path": record.request_info.path if hasattr(record.request_info, "path") else "",
+                        "request_method": record.request_info.method if hasattr(record.request_info, "method") else "GET",
+                        "duration": record.performance_metrics.total_duration if hasattr(record.performance_metrics, "total_duration") else 0,
+                        "cpu_time": record.performance_metrics.cpu_time if hasattr(record.performance_metrics, "cpu_time") else 0,
+                        "memory_peak": record.performance_metrics.memory_usage.peak_memory if hasattr(record.performance_metrics, "memory_usage") and hasattr(record.performance_metrics.memory_usage, "peak_memory") else 0,
+                        "status_code": record.response_info.status_code if hasattr(record.response_info, "status_code") else 200,
                         "timestamp": record.timestamp.isoformat(),
                         "function_call_count": len(record.function_calls) if record.function_calls else 0
                     }
@@ -288,7 +288,7 @@ async def get_performance_trends(
 @router.get("/slow-functions/{project_key}", summary="获取慢函数统计")
 async def get_slow_functions(
     project_key: str,
-    limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
+    limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
     min_duration: float = Query(0.1, description="最小耗时阈值（秒）")
 ):
     """获取项目中的慢函数统计"""
@@ -316,4 +316,75 @@ async def get_slow_functions(
         return error_response(
             ErrorCode.SYSTEM_ERROR,
             f"获取慢函数统计失败: {str(e)}"
+        )
+
+
+@router.post("/batch", summary="批量性能数据上报")
+async def batch_collect_performance_data(
+    batch_data: dict,
+    x_project_key: str = Header(..., alias="X-Project-Key", description="项目密钥")
+):
+    """接收第三方应用上报的批量性能数据"""
+    try:
+        # 验证项目密钥
+        project_service = ProjectService()
+        project = await project_service.get_project_by_key(x_project_key)
+        if not project:
+            return error_response(
+                ErrorCode.INVALID_PROJECT_KEY,
+                "无效的项目密钥"
+            )
+        
+        # 检查项目是否启用监控
+        # 修复：ProjectConfig是Pydantic模型，不是字典，使用getattr访问属性
+        if not getattr(project.config, "enabled", True):
+            return error_response(
+                ErrorCode.PERMISSION_ERROR,
+                "项目监控已禁用"
+            )
+        
+        # 获取批量数据中的记录
+        records = batch_data.get("records", [])
+        if not records:
+            return error_response(
+                ErrorCode.PARAMETER_ERROR,
+                "批量数据中没有找到性能记录"
+            )
+        
+        # 保存批量性能数据
+        performance_service = PerformanceService()
+        saved_records = []
+        
+        for record_data in records:
+            try:
+                # 转换为PerformanceRecordCreate对象
+                record_create = PerformanceRecordCreate(**record_data)
+                record = await performance_service.save_performance_record(
+                    x_project_key, 
+                    record_create
+                )
+                saved_records.append({
+                    "trace_id": record.trace_id,
+                    "recorded_at": record.created_at.isoformat()
+                })
+            except Exception as e:
+                logger.error(f"保存单条性能记录失败: {str(e)}")
+                continue
+        
+        # 更新项目最后活跃时间
+        await project_service.update_last_activity(x_project_key)
+        
+        return success_response(
+            data={
+                "saved_count": len(saved_records),
+                "total_count": len(records),
+                "records": saved_records
+            },
+            msg=f"批量性能数据收集成功，共保存{len(saved_records)}条记录"
+        )
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"批量性能数据收集失败: {str(e)}"
         )

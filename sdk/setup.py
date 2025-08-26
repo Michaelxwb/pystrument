@@ -29,7 +29,14 @@ setup(
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="https://github.com/performance-monitor/sdk",
-    packages=find_packages(),
+    packages=[
+        'performance_monitor',
+        'performance_monitor.core',
+        'performance_monitor.utils',
+        'performance_monitor.flask',
+        'performance_monitor.django',
+        'performance_monitor.fastapi',
+    ],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

@@ -80,7 +80,7 @@ class PerformanceCollector:
                 "response_info": response_info,
                 "performance_metrics": {
                     "total_duration": total_duration,
-                    "cpu_time": self.profiler.cpu_time,
+                    "cpu_time": total_duration,  # 使用total_duration作为替代，因为Pyinstrument的Profiler没有cpu_time属性
                     "memory_usage": {
                         "peak_memory": end_memory,
                         "memory_delta": memory_delta

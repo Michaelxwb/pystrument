@@ -160,6 +160,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { performanceApi } from '@/api/performance'
+import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -256,10 +258,35 @@ onMounted(() => {
 
 const loadPerformanceData = async () => {
   try {
-    // 这里后续接入真实API
     console.log('加载性能数据:', traceId.value)
+    const response = await performanceApi.getRecordDetail(traceId.value)
+    const data = response.data
+    
+    // 更新记录数据
+    record.value = {
+      path: data.request_info?.path || '',
+      method: data.request_info?.method || 'GET',
+      statusCode: data.response_info?.status_code || 200,
+      totalDuration: Math.round((data.performance_metrics?.total_duration || 0) * 1000),
+      cpuTime: Math.round((data.performance_metrics?.cpu_time || 0) * 1000),
+      ioWait: Math.round(((data.performance_metrics?.total_duration || 0) - (data.performance_metrics?.cpu_time || 0)) * 1000),
+      memoryPeak: (data.performance_metrics?.memory_usage?.peak_memory || 0) * 1024 * 1024,
+      timestamp: formatDateTime(data.timestamp),
+      projectKey: data.project_key,
+      headers: data.request_info?.headers || {},
+      params: data.request_info?.query_params || {},
+      body: null
+    }
+    
+    // 处理函数调用数据
+    if (data.function_calls && data.function_calls.length > 0) {
+      functionCalls.value = processFunctionCalls(data.function_calls, data.performance_metrics?.total_duration || 0)
+    }
+    
+    console.log('性能数据加载成功:', data)
   } catch (error) {
     console.error('加载性能数据失败:', error)
+    ElMessage.error('加载性能数据失败')
   }
 }
 
@@ -287,12 +314,70 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const formatDateTime = (dateString?: string) => {
+  if (!dateString) return ''
+  try {
+    return new Date(dateString).toLocaleString('zh-CN')
+  } catch (error) {
+    return dateString
+  }
+}
+
+// 处理函数调用数据，转换为树形结构
+const processFunctionCalls = (calls: any[], totalDuration: number) => {
+  if (!calls || calls.length === 0) return []
+  
+  // 按调用顺序排序
+  calls.sort((a, b) => a.call_order - b.call_order)
+  
+  // 创建调用ID映射
+  const callMap = new Map()
+  calls.forEach(call => {
+    callMap.set(call.call_id, {
+      id: call.call_id,
+      functionName: call.function_name,
+      fileName: call.file_path.split('/').pop() || call.file_path,
+      lineNumber: call.line_number,
+      duration: Math.round(call.duration * 1000),
+      percentage: Math.round((call.duration / totalDuration) * 100),
+      children: []
+    })
+  })
+  
+  // 构建树形结构
+  const rootCalls = []
+  calls.forEach(call => {
+    const node = callMap.get(call.call_id)
+    
+    if (call.parent_call_id && callMap.has(call.parent_call_id)) {
+      const parent = callMap.get(call.parent_call_id)
+      parent.children.push(node)
+    } else {
+      rootCalls.push(node)
+    }
+  })
+  
+  return rootCalls
+}
+
 const expandAll = () => {
-  treeRef.value.expandAll()
+  if (!treeRef.value) return
+  
+  // 通过DOM直接操作展开按钮
+  const expandButtons = document.querySelectorAll('.el-tree-node__expand-icon:not(.is-leaf):not(.expanded)')
+  expandButtons.forEach(button => {
+    ;(button as HTMLElement).click()
+  })
 }
 
 const collapseAll = () => {
-  treeRef.value.collapseAll()
+  if (!treeRef.value) return
+  
+  // 通过DOM直接操作已展开的按钮
+  const collapseButtons = document.querySelectorAll('.el-tree-node__expand-icon:not(.is-leaf).expanded')
+  collapseButtons.forEach(button => {
+    ;(button as HTMLElement).click()
+  })
 }
 
 const triggerAnalysis = () => {
