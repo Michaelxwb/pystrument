@@ -1,7 +1,6 @@
 <template>
   <div class="project-management">
     <div class="page-header">
-      <h2>项目管理</h2>
       <el-button type="primary" @click="showCreateDialog = true">
         <el-icon><Plus /></el-icon>
         创建项目
@@ -249,6 +248,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
 import type { Project, ProjectCreate, ProjectUpdate } from '@/types/project'
+import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -431,7 +431,7 @@ onMounted(() => {
 
 <style scoped>
 .project-management {
-  padding: 20px;
+  padding: 20px 20px 20px 20px;
 }
 
 .page-header {
@@ -439,11 +439,6 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  color: #303133;
 }
 
 .filter-section {

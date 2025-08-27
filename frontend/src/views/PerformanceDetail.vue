@@ -5,8 +5,6 @@
         <el-icon><ArrowLeft /></el-icon>
         返回性能监控
       </el-button>
-      <h1>性能详情</h1>
-      <p>追踪ID: {{ traceId }}</p>
     </div>
 
     <el-row :gutter="20">
@@ -162,6 +160,8 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { performanceApi } from '@/api/performance'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft, DataAnalysis, Download, Share } from '@element-plus/icons-vue'
+import PageTitle from '@/components/PageTitle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -398,21 +398,10 @@ const shareReport = () => {
 
 <style lang="scss" scoped>
 .performance-detail {
+  padding-top: 15px;
+  
   .page-header {
     margin-bottom: 24px;
-    
-    h1 {
-      margin: 8px 0;
-      color: #303133;
-      font-size: 24px;
-    }
-    
-    p {
-      margin: 0;
-      color: #909399;
-      font-size: 14px;
-      font-family: monospace;
-    }
   }
   
   .metrics-container {

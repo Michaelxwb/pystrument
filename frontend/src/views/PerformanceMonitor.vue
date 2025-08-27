@@ -1,7 +1,6 @@
 <template>
   <div class="performance-monitor">
     <div class="page-header">
-      <h2>性能监控</h2>
       <div class="header-actions">
         <el-select
           v-model="selectedProject"
@@ -305,6 +304,7 @@ import type { Project } from '@/types/project'
 import type { PerformanceRecord } from '@/types/performance'
 import PerformanceDetails from '@/components/PerformanceDetails.vue'
 import CallTraceViewer from '@/components/CallTraceViewer.vue'
+import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -974,7 +974,7 @@ onMounted(async () => {
 
 <style scoped>
 .performance-monitor {
-  padding: 20px;
+  padding: 20px 20px 20px 20px;
 }
 
 .page-header {
@@ -982,11 +982,6 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  color: #303133;
 }
 
 .header-actions {

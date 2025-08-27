@@ -9,7 +9,6 @@
         >
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
-        <h2>AI性能分析报告</h2>
         <span v-if="projectName" class="project-name">{{ projectName }}</span>
       </div>
       <div class="header-actions">
@@ -325,6 +324,7 @@ import { analysisApi } from '@/api/analysis'
 import { projectApi } from '@/api/project'
 import type { AnalysisRecord, AnalysisResults } from '@/types/analysis'
 import { generateAnalysisReportPDF } from '@/utils/reportGenerator'
+import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -783,7 +783,7 @@ onMounted(async () => {
 
 <style scoped>
 .ai-analysis {
-  padding: 20px;
+  padding: 20px 20px 20px 20px;
   max-width: 1200px;
   margin: 0 auto;
 }

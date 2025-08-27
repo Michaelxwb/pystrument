@@ -1,9 +1,6 @@
 <template>
   <div class="settings">
-    <div class="page-header">
-      <h1>系统设置</h1>
-      <p>配置性能监控平台的各项参数</p>
-    </div>
+
 
     <el-row :gutter="20">
       <el-col :span="16">
@@ -282,6 +279,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check, Refresh, Connection, Delete, Download, Upload, UploadFilled } from '@element-plus/icons-vue'
 import { settingsApi } from '@/api/settings'
 import type { SystemSettings, SystemStatus, OperationLog } from '@/api/settings'
+import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -633,22 +631,7 @@ const formatDateTime = (dateString: string) => {
 
 <style lang="scss" scoped>
 .settings {
-  .page-header {
-    margin-bottom: 24px;
-    
-    h1 {
-      margin: 0 0 8px 0;
-      color: #303133;
-      font-size: 24px;
-      font-weight: 600;
-    }
-    
-    p {
-      margin: 0;
-      color: #909399;
-      font-size: 14px;
-    }
-  }
+  padding-top: 15px;
   
   .card-header {
     display: flex;

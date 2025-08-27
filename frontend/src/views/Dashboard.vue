@@ -1,9 +1,6 @@
 <template>
   <div class="dashboard">
-    <div class="dashboard-header">
-      <h1>性能监控仪表板</h1>
-      <p>欢迎使用基于 Pyinstrument 的性能分析平台</p>
-    </div>
+
 
     <el-row :gutter="20">
       <!-- 统计卡片 -->
@@ -165,6 +162,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { dashboardApi } from '@/api/dashboard'
 import * as echarts from 'echarts'
+import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -474,22 +472,7 @@ const initChart = () => {
 
 <style lang="scss" scoped>
 .dashboard {
-  .dashboard-header {
-    margin-bottom: 24px;
-    
-    h1 {
-      margin: 0 0 8px 0;
-      color: #303133;
-      font-size: 24px;
-      font-weight: 600;
-    }
-    
-    p {
-      margin: 0;
-      color: #909399;
-      font-size: 14px;
-    }
-  }
+  padding-top: 15px;
   
   .stat-card {
     .el-card__body {

@@ -1,9 +1,6 @@
 <template>
   <div class="analysis-results">
-    <div class="page-header">
-      <h1>AI分析结果</h1>
-      <p>查看和管理性能分析结果</p>
-    </div>
+
 
     <el-card>
       <template #header>
@@ -144,6 +141,7 @@ import { projectApi } from '@/api/project'
 import { http } from '@/utils/request'
 import { generateAnalysisReportPDF } from '@/utils/reportGenerator'
 import type { AnalysisRecord } from '@/types/analysis'
+import PageTitle from '@/components/PageTitle.vue'
 
 const router = useRouter()
 
@@ -521,22 +519,7 @@ const deleteAnalysis = async (row: any) => {
 
 <style lang="scss" scoped>
 .analysis-results {
-  .page-header {
-    margin-bottom: 24px;
-    
-    h1 {
-      margin: 0 0 8px 0;
-      color: #303133;
-      font-size: 24px;
-      font-weight: 600;
-    }
-    
-    p {
-      margin: 0;
-      color: #909399;
-      font-size: 14px;
-    }
-  }
+  padding-top: 15px;
   
   .filter-container {
     margin-bottom: 20px;
