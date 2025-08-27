@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/projects")
+@router.get("")
 async def list_projects(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页记录数"),
@@ -61,7 +61,7 @@ async def list_projects(
     })
 
 
-@router.get("/projects/{project_key}")
+@router.get("/{project_key}")
 async def get_project(
     project_key: str = Path(..., description="项目标识"),
     db = Depends(get_database)
@@ -85,7 +85,7 @@ async def get_project(
     return success_response(result)
 
 
-@router.post("/projects/")
+@router.post("/")
 async def create_project(
     project_data: dict = Body(...),
     db = Depends(get_database)
@@ -126,7 +126,7 @@ async def create_project(
     return success_response(result)
 
 
-@router.put("/projects/{project_key}")
+@router.put("/{project_key}")
 async def update_project(
     project_key: str = Path(..., description="项目标识"),
     project_data: dict = Body(...),
@@ -168,7 +168,7 @@ async def update_project(
     return success_response(result)
 
 
-@router.delete("/projects/{project_key}")
+@router.delete("/{project_key}")
 async def delete_project(
     project_key: str = Path(..., description="项目标识"),
     db = Depends(get_database)
@@ -188,7 +188,7 @@ async def delete_project(
     return success_response({"message": "项目删除成功"})
 
 
-@router.get("/projects/{project_key}/stats")
+@router.get("/{project_key}/stats")
 async def get_project_stats(
     project_key: str = Path(..., description="项目标识"),
     db = Depends(get_database)

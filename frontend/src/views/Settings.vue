@@ -145,7 +145,7 @@
 
         <!-- 保存按钮 -->
         <div style="margin-top: 20px; text-align: center;">
-          <el-button type="primary" size="large" @click="saveSettings">
+          <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
             <el-icon><Check /></el-icon>
             保存设置
           </el-button>
@@ -158,47 +158,60 @@
 
       <el-col :span="8">
         <!-- 系统状态 -->
-        <el-card>
+        <el-card v-loading="statusLoading">
           <template #header>
-            <span>系统状态</span>
+            <div class="card-header">
+              <span>系统状态</span>
+              <el-button type="text" @click="refreshStatus">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
           </template>
           <div class="system-status">
             <div class="status-item">
               <span class="status-label">数据库:</span>
-              <el-tag type="success">正常</el-tag>
+              <el-tag :type="getStatusType(systemStatus.database?.status)">
+                {{ getStatusText(systemStatus.database?.status) }}
+              </el-tag>
             </div>
             <div class="status-item">
               <span class="status-label">Redis:</span>
-              <el-tag type="success">正常</el-tag>
+              <el-tag :type="getStatusType(systemStatus.redis?.status)">
+                {{ getStatusText(systemStatus.redis?.status) }}
+              </el-tag>
             </div>
             <div class="status-item">
               <span class="status-label">AI服务:</span>
-              <el-tag type="warning">配置中</el-tag>
+              <el-tag :type="getStatusType(systemStatus.aiService?.status)">
+                {{ getStatusText(systemStatus.aiService?.status) }}
+              </el-tag>
             </div>
             <div class="status-item">
               <span class="status-label">存储空间:</span>
-              <span>75% (12GB/16GB)</span>
+              <span>{{ getStorageText(systemStatus.storage) }}</span>
             </div>
           </div>
         </el-card>
 
         <!-- 操作日志 -->
-        <el-card style="margin-top: 20px;">
+        <el-card style="margin-top: 20px;" v-loading="logsLoading">
           <template #header>
-            <span>最近操作</span>
+            <div class="card-header">
+              <span>最近操作</span>
+              <el-button type="text" @click="refreshLogs">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
           </template>
           <div class="operation-logs">
-            <div class="log-item">
-              <div class="log-time">2024-01-20 15:30</div>
-              <div class="log-content">更新了监控设置</div>
+            <div v-if="operationLogs.length === 0" class="no-data">
+              暂无操作日志
             </div>
-            <div class="log-item">
-              <div class="log-time">2024-01-20 14:15</div>
-              <div class="log-content">创建了新项目</div>
-            </div>
-            <div class="log-item">
-              <div class="log-time">2024-01-20 13:45</div>
-              <div class="log-content">配置AI服务</div>
+            <div v-else v-for="log in operationLogs" :key="log.id" class="log-item">
+              <div class="log-time">{{ formatDateTime(log.timestamp) }}</div>
+              <div class="log-content">{{ log.details }}</div>
             </div>
           </div>
         </el-card>
@@ -209,19 +222,19 @@
             <span>快捷操作</span>
           </template>
           <div class="quick-actions">
-            <el-button type="primary" @click="testConnection">
+            <el-button type="primary" @click="testConnection" :loading="testing">
               <el-icon><Connection /></el-icon>
               测试连接
             </el-button>
-            <el-button @click="clearCache">
+            <el-button @click="clearCache" :loading="clearing">
               <el-icon><Delete /></el-icon>
               清理缓存
             </el-button>
-            <el-button @click="exportConfig">
+            <el-button @click="exportConfig" :loading="exporting">
               <el-icon><Download /></el-icon>
               导出配置
             </el-button>
-            <el-button @click="importConfig">
+            <el-button @click="importConfig" :loading="importing">
               <el-icon><Upload /></el-icon>
               导入配置
             </el-button>
@@ -229,12 +242,46 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 导入配置对话框 -->
+    <el-dialog v-model="importDialogVisible" title="导入配置" width="500px">
+      <el-upload
+        class="upload-demo"
+        drag
+        action="#"
+        :auto-upload="false"
+        :on-change="handleFileChange"
+        :limit="1"
+        accept=".json"
+      >
+        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+        <div class="el-upload__text">
+          拖拽文件到这里或 <em>点击上传</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">
+            只能上传JSON文件，且不超过500KB
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="importDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitImport" :loading="importing">
+            确认导入
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check, Refresh, Connection, Delete, Download, Upload, UploadFilled } from '@element-plus/icons-vue'
+import { settingsApi } from '@/api/settings'
+import type { SystemSettings, SystemStatus, OperationLog } from '@/api/settings'
 
 // 定义组件名称
 defineOptions({
@@ -272,72 +319,315 @@ const notificationSettings = ref({
   webhookUrl: ''
 })
 
-const saveSettings = async () => {
+// 系统状态
+const systemStatus = ref<SystemStatus>({
+  database: { status: 'normal', message: '连接正常' },
+  redis: { status: 'normal', message: '连接正常' },
+  aiService: { status: 'warning', message: '配置中' },
+  storage: { used: 0, total: 0, unit: 'MB' }
+})
+
+// 操作日志
+const operationLogs = ref<OperationLog[]>([])
+
+// 加载状态
+const loading = ref(false)
+const saving = ref(false)
+const statusLoading = ref(false)
+const logsLoading = ref(false)
+const testing = ref(false)
+const clearing = ref(false)
+const exporting = ref(false)
+const importing = ref(false)
+
+// 导入对话框
+const importDialogVisible = ref(false)
+const importFile = ref<File | null>(null)
+
+// 初始化
+onMounted(async () => {
+  await Promise.all([
+    loadSettings(),
+    loadSystemStatus(),
+    loadOperationLogs()
+  ])
+})
+
+// 加载设置
+const loadSettings = async () => {
+  loading.value = true
   try {
-    // 这里后续接入真实API
-    console.log('保存设置:', {
+    const response = await settingsApi.getSettings()
+    const data = response.data
+    
+    // 更新设置
+    basicSettings.value = data.basic
+    monitorSettings.value = data.monitor
+    aiSettings.value = data.ai
+    notificationSettings.value = data.notification
+    
+    console.log('加载设置成功:', data)
+  } catch (error) {
+    console.error('加载设置失败:', error)
+    ElMessage.error('加载设置失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 保存设置
+const saveSettings = async () => {
+  saving.value = true
+  try {
+    // 准备设置数据
+    const settingsData: SystemSettings = {
       basic: basicSettings.value,
       monitor: monitorSettings.value,
       ai: aiSettings.value,
       notification: notificationSettings.value
-    })
+    }
     
-    ElMessage.success('设置保存成功')
+    // 发送请求
+    const response = await settingsApi.updateSettings(settingsData)
+    
+    if (response.data.success) {
+      ElMessage.success('设置保存成功')
+      // 重新加载操作日志
+      await loadOperationLogs()
+    } else {
+      ElMessage.error('设置保存失败')
+    }
   } catch (error) {
     console.error('保存设置失败:', error)
     ElMessage.error('保存设置失败')
+  } finally {
+    saving.value = false
   }
 }
 
-const resetSettings = () => {
-  // 重置为默认值
-  basicSettings.value = {
-    platformName: '性能分析平台',
-    adminEmail: 'admin@example.com',
-    timezone: 'Asia/Shanghai',
-    language: 'zh-CN'
+// 重置设置
+const resetSettings = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要重置所有设置到默认值吗？此操作不可恢复。',
+      '确认重置',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    await loadSettings()
+    ElMessage.info('设置已重置')
+  } catch {
+    // 用户取消操作
+    console.log('用户取消重置')
   }
-  
-  monitorSettings.value = {
-    defaultSamplingRate: 0.3,
-    dataRetentionDays: 30,
-    slowQueryThreshold: 500,
-    autoCleanup: true
-  }
-  
-  aiSettings.value = {
-    defaultService: 'openai-gpt3.5',
-    apiKey: '',
-    requestTimeout: 30,
-    autoAnalysis: false
-  }
-  
-  notificationSettings.value = {
-    emailEnabled: false,
-    smtpServer: '',
-    smtpPort: 587,
-    senderEmail: '',
-    webhookEnabled: false,
-    webhookUrl: ''
-  }
-  
-  ElMessage.info('设置已重置')
 }
 
-const testConnection = () => {
-  ElMessage.info('连接测试功能正在开发中')
+// 加载系统状态
+const loadSystemStatus = async () => {
+  statusLoading.value = true
+  try {
+    const response = await settingsApi.getSystemStatus()
+    systemStatus.value = response.data
+    console.log('加载系统状态成功:', response.data)
+  } catch (error) {
+    console.error('加载系统状态失败:', error)
+    ElMessage.error('加载系统状态失败')
+  } finally {
+    statusLoading.value = false
+  }
 }
 
-const clearCache = () => {
-  ElMessage.info('清理缓存功能正在开发中')
+// 刷新系统状态
+const refreshStatus = () => {
+  loadSystemStatus()
 }
 
-const exportConfig = () => {
-  ElMessage.info('导出配置功能正在开发中')
+// 加载操作日志
+const loadOperationLogs = async () => {
+  logsLoading.value = true
+  try {
+    const response = await settingsApi.getOperationLogs({ page: 1, size: 5 })
+    operationLogs.value = response.data.logs
+    console.log('加载操作日志成功:', response.data)
+  } catch (error) {
+    console.error('加载操作日志失败:', error)
+    ElMessage.error('加载操作日志失败')
+  } finally {
+    logsLoading.value = false
+  }
 }
 
+// 刷新操作日志
+const refreshLogs = () => {
+  loadOperationLogs()
+}
+
+// 测试连接
+const testConnection = async () => {
+  testing.value = true
+  try {
+    // 测试数据库连接
+    const dbResponse = await settingsApi.testDatabaseConnection()
+    
+    // 测试Redis连接
+    const redisResponse = await settingsApi.testRedisConnection()
+    
+    // 测试AI服务连接
+    const aiResponse = await settingsApi.testAIServiceConnection()
+    
+    // 显示结果
+    ElMessage.success('连接测试完成')
+    
+    // 更新状态
+    await loadSystemStatus()
+  } catch (error) {
+    console.error('测试连接失败:', error)
+    ElMessage.error('测试连接失败')
+  } finally {
+    testing.value = false
+  }
+}
+
+// 清理缓存
+const clearCache = async () => {
+  clearing.value = true
+  try {
+    const response = await settingsApi.clearCache()
+    
+    if (response.data.success) {
+      ElMessage.success(response.data.message || '缓存清理成功')
+      // 更新操作日志
+      await loadOperationLogs()
+    } else {
+      ElMessage.error(response.data.message || '缓存清理失败')
+    }
+  } catch (error) {
+    console.error('清理缓存失败:', error)
+    ElMessage.error('清理缓存失败')
+  } finally {
+    clearing.value = false
+  }
+}
+
+// 导出配置
+const exportConfig = async () => {
+  exporting.value = true
+  try {
+    const response = await settingsApi.exportConfig()
+    
+    // 创建下载链接
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `系统配置_${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    ElMessage.success('配置导出成功')
+    
+    // 更新操作日志
+    await loadOperationLogs()
+  } catch (error) {
+    console.error('导出配置失败:', error)
+    ElMessage.error('导出配置失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
+// 打开导入配置对话框
 const importConfig = () => {
-  ElMessage.info('导入配置功能正在开发中')
+  importDialogVisible.value = true
+  importFile.value = null
+}
+
+// 处理文件选择
+const handleFileChange = (file: any) => {
+  importFile.value = file.raw
+}
+
+// 提交导入
+const submitImport = async () => {
+  if (!importFile.value) {
+    ElMessage.warning('请选择要导入的配置文件')
+    return
+  }
+  
+  importing.value = true
+  try {
+    const response = await settingsApi.importConfig(importFile.value)
+    
+    if (response.data.success) {
+      ElMessage.success(response.data.message || '配置导入成功')
+      importDialogVisible.value = false
+      
+      // 重新加载设置和操作日志
+      await Promise.all([
+        loadSettings(),
+        loadOperationLogs()
+      ])
+    } else {
+      ElMessage.error(response.data.message || '配置导入失败')
+    }
+  } catch (error) {
+    console.error('导入配置失败:', error)
+    ElMessage.error('导入配置失败')
+  } finally {
+    importing.value = false
+  }
+}
+
+// 获取状态类型
+const getStatusType = (status?: string) => {
+  if (!status) return 'info'
+  
+  switch (status) {
+    case 'normal':
+      return 'success'
+    case 'warning':
+      return 'warning'
+    case 'error':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 获取状态文本
+const getStatusText = (status?: string) => {
+  if (!status) return '未知'
+  
+  switch (status) {
+    case 'normal':
+      return '正常'
+    case 'warning':
+      return '警告'
+    case 'error':
+      return '错误'
+    default:
+      return status
+  }
+}
+
+// 获取存储文本
+const getStorageText = (storage?: { used: number; total: number; unit: string }) => {
+  if (!storage) return '未知'
+  
+  const usedPercentage = storage.total > 0 ? Math.round(storage.used / storage.total * 100) : 0
+  return `${usedPercentage}% (${storage.used}/${storage.total}${storage.unit})`
+}
+
+// 格式化日期时间
+const formatDateTime = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleString('zh-CN')
 }
 </script>
 
@@ -360,6 +650,12 @@ const importConfig = () => {
     }
   }
   
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
   .system-status {
     .status-item {
       display: flex;
@@ -380,6 +676,8 @@ const importConfig = () => {
   }
   
   .operation-logs {
+    min-height: 150px;
+    
     .log-item {
       padding: 8px 0;
       border-bottom: 1px solid #f0f0f0;
@@ -398,6 +696,13 @@ const importConfig = () => {
         font-size: 14px;
         color: #303133;
       }
+    }
+    
+    .no-data {
+      text-align: center;
+      color: #909399;
+      padding: 30px 0;
+      font-size: 14px;
     }
   }
   

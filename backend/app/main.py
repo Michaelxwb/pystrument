@@ -10,7 +10,7 @@ import logging
 from app.config.settings import settings
 from app.middleware.cors import setup_cors
 from app.middleware.response import setup_response_middleware
-from app.api.v1 import projects, performance, analysis, dashboard
+from app.api.v1 import projects, performance, analysis, dashboard, settings as settings_api
 from app.utils.database import init_database, close_database
 
 
@@ -55,10 +55,11 @@ setup_cors(app)
 setup_response_middleware(app)
 
 # 注册API路由
-app.include_router(projects.router, prefix="/api/v1", tags=["项目管理"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["项目管理"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["性能数据"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["AI分析"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["仪表盘"])
+app.include_router(settings_api.router, prefix="/api/v1/settings", tags=["系统设置"])
 
 
 @app.get("/")
