@@ -278,13 +278,14 @@
     >
       <div v-if="showCallTraceDialog" class="detail-loading-container">
         <el-skeleton v-if="detailLoading" :rows="10" animated />
-        <call-trace-viewer
-          v-else-if="detailRecord"
-          :record="detailRecord"
-          @close="showCallTraceDialog = false"
-        />
+        <div v-else-if="detailRecord && detailRecord.function_calls && detailRecord.function_calls.length > 0">
+          <call-trace-viewer
+            :record="detailRecord"
+            @close="showCallTraceDialog = false"
+          />
+        </div>
         <div v-else class="no-data">
-          <el-empty description="无法加载调用链数据" />
+          <el-empty description="该记录没有函数调用数据或数据格式不正确" />
         </div>
       </div>
     </el-dialog>
@@ -753,13 +754,26 @@ const viewDetails = async (record: any) => {
 
 const viewCallTrace = async (record: any) => {
   // 保存选中记录，并显示调用链对话框
+  console.log('查看调用链:', record)
   selectedRecord.value = record
   showCallTraceDialog.value = true
   detailLoading.value = true
   
   try {
     // 使用 trace_id 获取完整详情
+    console.log('获取调用链详情, trace_id:', record.trace_id)
     const response = await performanceApi.getRecordDetail(record.trace_id)
+    
+    console.log('获取到的性能记录详情:', response.data)
+    
+    // 检查function_calls数据
+    if (!response.data.function_calls || !Array.isArray(response.data.function_calls) || response.data.function_calls.length === 0) {
+      console.warn('该记录没有函数调用数据:', response.data)
+      ElMessage.warning('该记录没有函数调用数据')
+    } else {
+      console.log('函数调用数据:', response.data.function_calls.length, '条')
+    }
+    
     detailRecord.value = response.data
   } catch (error) {
     console.error('获取性能记录详情失败:', error)

@@ -434,33 +434,52 @@ class PerformanceService:
     async def get_function_call_tree(self, trace_id: str) -> Dict[str, Any]:
         """获取函数调用树"""
         try:
-            # 获取所有函数调用记录
-            cursor = self.function_calls_collection.find({"trace_id": trace_id}).sort("call_context.call_order", 1)
-            function_calls = await cursor.to_list(None)
+            # 首先从性能记录中获取函数调用数据
+            record = await self.get_performance_record_by_trace_id(trace_id)
+            if not record or not record.function_calls:
+                logger.warning(f"无法获取函数调用数据: {trace_id}")
+                return {
+                    "trace_id": trace_id,
+                    "call_tree": [],
+                    "total_functions": 0
+                }
             
-            if not function_calls:
-                return {}
+            # 使用记录中的函数调用数据
+            function_calls = record.function_calls
             
             # 构建调用树
             call_map = {}
             root_calls = []
             
+            # 首先创建所有节点
             for call in function_calls:
-                call_id = call["call_id"]
-                call_map[call_id] = {
-                    "call_id": call_id,
-                    "function_name": call["function_info"]["name"],
-                    "duration": call["execution_info"]["duration"],
-                    "file_path": call["function_info"]["file_path"],
+                call_map[call.call_id] = {
+                    "call_id": call.call_id,
+                    "function_name": call.function_name,
+                    "duration": call.duration,
+                    "file_path": call.file_path,
+                    "line_number": call.line_number,
+                    "depth": call.depth,
+                    "call_order": call.call_order,
                     "children": []
                 }
-                
-                parent_id = call.get("parent_call_id")
-                if parent_id:
-                    if parent_id in call_map:
-                        call_map[parent_id]["children"].append(call_map[call_id])
+            
+            # 建立父子关系
+            for call in function_calls:
+                if call.parent_call_id and call.parent_call_id in call_map:
+                    parent = call_map[call.parent_call_id]
+                    parent["children"].append(call_map[call.call_id])
                 else:
-                    root_calls.append(call_map[call_id])
+                    root_calls.append(call_map[call.call_id])
+            
+            # 如果没有找到根调用，则按深度和调用顺序排序
+            if not root_calls and function_calls:
+                function_calls_sorted = sorted(function_calls, key=lambda x: (x.depth, x.call_order))
+                for call in function_calls_sorted:
+                    if call.depth == 0 or not any(c.call_id == call.parent_call_id for c in function_calls):
+                        root_calls.append(call_map[call.call_id])
+            
+            logger.info(f"成功构建函数调用树: {trace_id}, 函数数量: {len(function_calls)}, 根调用数量: {len(root_calls)}")
             
             return {
                 "trace_id": trace_id,
@@ -470,7 +489,13 @@ class PerformanceService:
             
         except Exception as e:
             logger.error(f"获取函数调用树失败: {str(e)}")
-            raise
+            # 返回空结果而不是抛出异常
+            return {
+                "trace_id": trace_id,
+                "call_tree": [],
+                "total_functions": 0,
+                "error": str(e)
+            }
     
     async def get_total_records_count(self) -> int:
         """获取性能记录总数"""
