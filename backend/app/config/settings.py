@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     api_version: str = "v1"
     
     # 数据库配置
-    mongodb_url: str = "mongodb://192.168.1.7:37017/pystrument"
+    mongodb_url: str = "mongodb://admin:admin123@127.0.0.1:27017/?authSource=admin"
+    # mongodb_url: str = "mongodb://192.168.1.7:37017/pystrument"
+    # mongodb_url: str = "mongodb://34.tcp.cpolar.top:10795/pystrument"
     mongodb_database: str = "pystrument"
     redis_url: str = "redis://:redis123@localhost:6379/0"
     

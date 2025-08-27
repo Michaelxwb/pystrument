@@ -8,7 +8,7 @@
     <el-row :gutter="20">
       <!-- 统计卡片 -->
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card" v-loading="loading.stats">
           <div class="stat-content">
             <div class="stat-number">{{ stats.totalProjects }}</div>
             <div class="stat-label">项目总数</div>
@@ -18,7 +18,7 @@
       </el-col>
       
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card" v-loading="loading.stats">
           <div class="stat-content">
             <div class="stat-number">{{ stats.totalRecords }}</div>
             <div class="stat-label">性能记录</div>
@@ -28,7 +28,7 @@
       </el-col>
       
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card" v-loading="loading.stats">
           <div class="stat-content">
             <div class="stat-number">{{ stats.todayAnalysis }}</div>
             <div class="stat-label">今日分析</div>
@@ -38,7 +38,7 @@
       </el-col>
       
       <el-col :span="6">
-        <el-card class="stat-card">
+        <el-card class="stat-card" v-loading="loading.stats">
           <div class="stat-content">
             <div class="stat-number">{{ stats.avgResponseTime }}ms</div>
             <div class="stat-label">平均响应时间</div>
@@ -68,9 +68,12 @@
 
       <!-- 项目状态 -->
       <el-col :span="8">
-        <el-card>
+        <el-card v-loading="loading.projects">
           <template #header>
-            <span>项目状态</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span>项目状态</span>
+              <el-button size="small" @click="refreshProjects" :icon="Refresh"></el-button>
+            </div>
           </template>
           <div class="project-list">
             <div v-for="project in recentProjects" :key="project.key" class="project-item">
@@ -94,9 +97,12 @@
     <el-row :gutter="20" style="margin-top: 20px;">
       <!-- 最近分析结果 -->
       <el-col :span="12">
-        <el-card>
+        <el-card v-loading="loading.analysis">
           <template #header>
-            <span>最近分析结果</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span>最近分析结果</span>
+              <el-button size="small" @click="refreshAnalysis" :icon="Refresh"></el-button>
+            </div>
           </template>
           <el-table :data="recentAnalysis" style="width: 100%">
             <el-table-column prop="projectName" label="项目" width="120" />
@@ -122,26 +128,29 @@
 
       <!-- 系统信息 -->
       <el-col :span="12">
-        <el-card>
+        <el-card v-loading="loading.systemInfo">
           <template #header>
-            <span>系统信息</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span>系统信息</span>
+              <el-button size="small" @click="refreshSystemInfo" :icon="Refresh"></el-button>
+            </div>
           </template>
           <div class="system-info">
             <div class="info-item">
               <span class="info-label">平台版本:</span>
-              <span class="info-value">v1.0.0</span>
+              <span class="info-value">{{ systemInfo.version }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">运行时间:</span>
-              <span class="info-value">{{ uptime }}</span>
+              <span class="info-value">{{ systemInfo.uptime }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">数据库状态:</span>
-              <el-tag type="success" size="small">正常</el-tag>
+              <el-tag :type="systemInfo.dbStatus === '正常' ? 'success' : 'danger'" size="small">{{ systemInfo.dbStatus }}</el-tag>
             </div>
             <div class="info-item">
               <span class="info-label">Redis状态:</span>
-              <el-tag type="success" size="small">正常</el-tag>
+              <el-tag :type="systemInfo.redisStatus === '正常' ? 'success' : 'danger'" size="small">{{ systemInfo.redisStatus }}</el-tag>
             </div>
           </div>
         </el-card>
@@ -151,7 +160,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
+import { dashboardApi } from '@/api/dashboard'
 
 // 定义组件名称
 defineOptions({
@@ -162,33 +174,150 @@ defineOptions({
 const timeRange = ref('7d')
 const performanceChart = ref()
 
-const stats = ref({
-  totalProjects: 5,
-  totalRecords: 1234,
-  todayAnalysis: 23,
-  avgResponseTime: 145
+// 加载状态
+const loading = ref({
+  stats: false,
+  projects: false,
+  analysis: false,
+  systemInfo: false
 })
 
-const recentProjects = ref([
-  { key: 'proj1', name: '电商系统', status: 'active', recordCount: 456 },
-  { key: 'proj2', name: '用户中心', status: 'active', recordCount: 234 },
-  { key: 'proj3', name: '订单服务', status: 'idle', recordCount: 123 },
-  { key: 'proj4', name: '支付网关', status: 'active', recordCount: 89 }
-])
+// 统计数据
+const stats = ref({
+  totalProjects: 0,
+  totalRecords: 0,
+  todayAnalysis: 0,
+  avgResponseTime: 0
+})
 
-const recentAnalysis = ref([
-  { projectName: '电商系统', type: 'AI分析', status: 'completed', createdAt: '2024-01-20 10:30' },
-  { projectName: '用户中心', type: '性能报告', status: 'processing', createdAt: '2024-01-20 09:15' },
-  { projectName: '订单服务', type: 'AI分析', status: 'completed', createdAt: '2024-01-19 16:45' }
-])
+// 项目数据
+const recentProjects = ref<Array<{
+  key: string
+  name: string
+  status: string
+  recordCount: number
+}>>([])
 
-const uptime = ref('2天 14小时')
+// 分析结果
+const recentAnalysis = ref<Array<{
+  projectName: string
+  type: string
+  status: string
+  createdAt: string
+}>>([])
+
+// 系统信息
+const systemInfo = ref({
+  version: 'v1.0.0',
+  uptime: '0天 0小时',
+  dbStatus: '正常',
+  redisStatus: '正常'
+})
+
+// 自动刷新定时器
+let autoRefreshTimer: number | null = null
 
 onMounted(() => {
-  // 初始化图表
-  initChart()
+  // 加载所有数据
+  loadAllData()
+  
+  // 设置自动刷新（每60秒）
+  autoRefreshTimer = window.setInterval(() => {
+    loadAllData()
+  }, 60000)
 })
 
+onUnmounted(() => {
+  // 清除定时器
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+})
+
+// 加载所有数据
+const loadAllData = () => {
+  loadStats()
+  loadRecentProjects()
+  loadRecentAnalysis()
+  loadSystemInfo()
+  initChart()
+}
+
+// 加载统计数据
+const loadStats = async () => {
+  loading.value.stats = true
+  try {
+    const response = await dashboardApi.getStats()
+    
+    stats.value = {
+      totalProjects: response.data.total_projects,
+      totalRecords: response.data.total_records,
+      todayAnalysis: response.data.today_analysis,
+      avgResponseTime: response.data.avg_response_time
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
+    ElMessage.error('加载统计数据失败')
+  } finally {
+    loading.value.stats = false
+  }
+}
+
+// 加载最近项目
+const loadRecentProjects = async () => {
+  loading.value.projects = true
+  try {
+    const response = await dashboardApi.getRecentProjects()
+    recentProjects.value = response.data
+  } catch (error) {
+    console.error('加载项目数据失败:', error)
+    ElMessage.error('加载项目数据失败')
+  } finally {
+    loading.value.projects = false
+  }
+}
+
+// 加载最近分析
+const loadRecentAnalysis = async () => {
+  loading.value.analysis = true
+  try {
+    const response = await dashboardApi.getRecentAnalysis()
+    recentAnalysis.value = response.data
+  } catch (error) {
+    console.error('加载分析结果失败:', error)
+    ElMessage.error('加载分析结果失败')
+  } finally {
+    loading.value.analysis = false
+  }
+}
+
+// 加载系统信息
+const loadSystemInfo = async () => {
+  loading.value.systemInfo = true
+  try {
+    const response = await dashboardApi.getSystemInfo()
+    
+    systemInfo.value = {
+      version: response.data.version,
+      uptime: response.data.uptime,
+      dbStatus: response.data.db_status,
+      redisStatus: response.data.redis_status
+    }
+  } catch (error) {
+    console.error('加载系统信息失败:', error)
+    ElMessage.error('加载系统信息失败')
+  } finally {
+    loading.value.systemInfo = false
+  }
+}
+
+// 刷新方法
+const refreshProjects = () => loadRecentProjects()
+const refreshAnalysis = () => loadRecentAnalysis()
+const refreshSystemInfo = () => loadSystemInfo()
+
+// 初始化图表
 const initChart = () => {
   // 这里后续可以集成 ECharts
   console.log('初始化性能趋势图表')

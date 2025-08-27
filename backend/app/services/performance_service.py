@@ -18,6 +18,7 @@ class PerformanceService:
         self.db = get_database()
         self.performance_collection = self.db.performance_records if self.db is not None else None
         self.function_calls_collection = self.db.function_calls if self.db is not None else None
+        self.analysis_collection = self.db.ai_analysis_results if self.db is not None else None
     
     async def save_performance_record(
         self, 
@@ -441,3 +442,82 @@ class PerformanceService:
         except Exception as e:
             logger.error(f"获取函数调用树失败: {str(e)}")
             raise
+    
+    async def get_total_records_count(self) -> int:
+        """获取性能记录总数"""
+        try:
+            return await self.performance_collection.count_documents({})
+        except Exception as e:
+            logger.error(f"获取性能记录总数失败: {str(e)}")
+            return 0
+    
+    async def get_analysis_count_since(self, start_time: datetime) -> int:
+        """获取指定时间之后的分析数量"""
+        try:
+            return await self.analysis_collection.count_documents({
+                "created_at": {"$gte": start_time}
+            })
+        except Exception as e:
+            logger.error(f"获取分析数量失败: {str(e)}")
+            return 0
+    
+    async def get_average_response_time(self) -> float:
+        """获取所有项目的平均响应时间"""
+        try:
+            pipeline = [
+                {"$group": {
+                    "_id": None,
+                    "avg_duration": {"$avg": "$performance_metrics.total_duration"}
+                }}
+            ]
+            
+            result = await self.performance_collection.aggregate(pipeline).to_list(1)
+            if result and len(result) > 0:
+                avg_duration = result[0].get("avg_duration", 0)
+                return round(avg_duration * 1000, 3)  # 转换为毫秒并保留3位小数
+            return 0
+        except Exception as e:
+            logger.error(f"获取平均响应时间失败: {str(e)}")
+            return 0
+    
+    async def get_record_count_by_project(self, project_key: str) -> int:
+        """获取指定项目的记录数量"""
+        try:
+            return await self.performance_collection.count_documents({
+                "project_key": project_key
+            })
+        except Exception as e:
+            logger.error(f"获取项目记录数量失败: {str(e)}")
+            return 0
+    
+    async def get_recent_analysis(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """获取最近的分析结果"""
+        try:
+            cursor = self.analysis_collection.find().sort("created_at", -1).limit(limit)
+            
+            analysis_results = []
+            async for doc in cursor:
+                doc.pop("_id", None)
+                
+                # 获取项目名称
+                project_key = doc.get("project_key")
+                project_name = project_key
+                try:
+                    project_service = ProjectService()
+                    project = await project_service.get_project_by_key(project_key)
+                    if project:
+                        project_name = project.name
+                except Exception:
+                    pass
+                
+                analysis_results.append({
+                    "projectName": project_name,
+                    "type": doc.get("analysis_type", "AI分析"),
+                    "status": doc.get("status", "completed"),
+                    "createdAt": doc.get("created_at").isoformat() if doc.get("created_at") else None
+                })
+            
+            return analysis_results
+        except Exception as e:
+            logger.error(f"获取最近分析结果失败: {str(e)}")
+            return []

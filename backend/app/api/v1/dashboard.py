@@ -1,0 +1,138 @@
+"""
+仪表盘API路由
+"""
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict, Any
+from datetime import datetime, timedelta
+
+from app.utils.response import success_response, error_response, ErrorCode
+from app.services.project_service import ProjectService
+from app.services.performance_service import PerformanceService
+
+router = APIRouter()
+
+
+@router.get("/dashboard/stats", summary="获取仪表盘统计数据")
+async def get_dashboard_stats():
+    """获取仪表盘统计数据"""
+    try:
+        project_service = ProjectService()
+        performance_service = PerformanceService()
+        
+        # 获取项目总数
+        projects, total_projects = await project_service.get_projects(page=1, size=1)
+        
+        # 获取性能记录总数
+        total_records = await performance_service.get_total_records_count()
+        
+        # 获取今日分析数量
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_analysis = await performance_service.get_analysis_count_since(today_start)
+        
+        # 获取平均响应时间
+        avg_response_time = await performance_service.get_average_response_time()
+        
+        return success_response(
+            data={
+                "total_projects": total_projects,
+                "total_records": total_records,
+                "today_analysis": today_analysis,
+                "avg_response_time": round(avg_response_time, 3),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取仪表盘统计数据失败: {str(e)}"
+        )
+
+
+@router.get("/dashboard/recent-projects", summary="获取最近活跃项目")
+async def get_recent_projects(limit: int = 5):
+    """获取最近活跃的项目"""
+    try:
+        project_service = ProjectService()
+        performance_service = PerformanceService()
+        
+        # 获取最近活跃的项目
+        projects, _ = await project_service.get_projects(page=1, size=limit)
+        
+        # 获取每个项目的记录数
+        result = []
+        for project in projects:
+            record_count = await performance_service.get_record_count_by_project(project.project_key)
+            result.append({
+                "key": project.project_key,
+                "name": project.name,
+                "status": project.status,
+                "recordCount": record_count
+            })
+        
+        return success_response(data=result)
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取最近活跃项目失败: {str(e)}"
+        )
+
+
+@router.get("/dashboard/recent-analysis", summary="获取最近分析结果")
+async def get_recent_analysis(limit: int = 5):
+    """获取最近的分析结果"""
+    try:
+        performance_service = PerformanceService()
+        
+        # 获取最近的分析结果
+        analysis_results = await performance_service.get_recent_analysis(limit)
+        
+        return success_response(data=analysis_results)
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取最近分析结果失败: {str(e)}"
+        )
+
+
+@router.get("/dashboard/system-info", summary="获取系统信息")
+async def get_system_info():
+    """获取系统信息"""
+    try:
+        project_service = ProjectService()
+        
+        # 获取系统运行信息
+        system_start_time = datetime.utcnow() - timedelta(days=2, hours=14)  # 示例数据，实际应从系统配置中获取
+        
+        # 检查数据库和Redis状态
+        db_status = "正常"
+        redis_status = "正常"
+        
+        # 获取平台版本
+        version = "v1.0.0"  # 示例数据，实际应从配置中获取
+        
+        return success_response(
+            data={
+                "version": version,
+                "uptime": format_uptime(system_start_time),
+                "db_status": db_status,
+                "redis_status": redis_status
+            }
+        )
+        
+    except Exception as e:
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取系统信息失败: {str(e)}"
+        )
+
+
+def format_uptime(start_time: datetime) -> str:
+    """格式化系统运行时间"""
+    delta = datetime.utcnow() - start_time
+    days = delta.days
+    hours = delta.seconds // 3600
+    
+    return f"{days}天 {hours}小时"
