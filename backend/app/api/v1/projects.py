@@ -1,238 +1,246 @@
 """
-项目管理API路由
+项目管理相关API路由
 """
-from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Optional
-from datetime import datetime
+from fastapi import APIRouter, HTTPException, Path, Depends, Query, Body
+from typing import Dict, Any, Optional, List
+import logging
 import uuid
+from datetime import datetime, timedelta
 
-from app.utils.response import success_response, error_response, ErrorCode
-from app.models.project import Project, ProjectCreate, ProjectUpdate
-from app.services.project_service import ProjectService
+from app.utils.response import success_response, error_response
+from app.utils.database import get_database
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/projects", summary="创建项目")
-async def create_project(project_data: ProjectCreate):
-    """创建新项目"""
-    try:
-        service = ProjectService()
-        
-        # 检查项目名称是否已存在
-        existing_project = await service.get_project_by_name(project_data.name)
-        if existing_project:
-            return error_response(
-                ErrorCode.PROJECT_NAME_EXISTS,
-                "项目名称已存在"
-            )
-        
-        # 创建项目
-        project = await service.create_project(project_data)
-        
-        return success_response(
-            data={
-                "project_key": project.project_key,
-                "name": project.name,
-                "description": project.description,
-                "framework": project.framework,
-                "base_url": project.base_url,
-                "status": project.status,
-                "created_at": project.created_at.isoformat()
-            },
-            msg="项目创建成功"
-        )
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"创建项目失败: {str(e)}"
-        )
-
-
-@router.get("/projects", summary="获取项目列表")
-async def get_projects(
+@router.get("/projects")
+async def list_projects(
     page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(10, ge=1, le=100, description="每页数量"),
-    status: Optional[str] = Query(None, description="项目状态"),
-    framework: Optional[str] = Query(None, description="技术框架")
+    size: int = Query(10, ge=1, le=100, description="每页记录数"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    framework: Optional[str] = Query(None, description="框架过滤"),
+    db = Depends(get_database)
 ):
     """获取项目列表"""
-    try:
-        service = ProjectService()
+    logger.info(f"获取项目列表, 页码: {page}, 大小: {size}")
+    
+    # 构建查询条件
+    query = {}
+    if status:
+        query["status"] = status
+    if framework:
+        query["framework"] = framework
+    
+    # 计算总数
+    total = await db.projects.count_documents(query)
+    
+    # 获取分页数据
+    skip = (page - 1) * size
+    cursor = db.projects.find(query).sort("created_at", -1).skip(skip).limit(size)
+    
+    projects = []
+    async for project in cursor:
+        # 将MongoDB对象转换为可序列化的字典
+        project_dict = {k: v for k, v in project.items() if k != "_id"}
         
-        # 构建查询条件
-        filters = {}
-        if status:
-            filters["status"] = status
-        if framework:
-            filters["framework"] = framework
+        # 格式化日期时间字段
+        for date_field in ["created_at", "updated_at"]:
+            if date_field in project_dict:
+                project_dict[date_field] = project_dict[date_field].isoformat()
         
-        # 获取项目列表
-        projects, total = await service.get_projects(
-            page=page,
-            size=size,
-            filters=filters
-        )
-        
-        return success_response(
-            data={
-                "projects": [
-                    {
-                        "project_key": p.project_key,
-                        "name": p.name,
-                        "description": p.description,
-                        "framework": p.framework,
-                        "base_url": p.base_url,
-                        "status": p.status,
-                        "created_at": p.created_at.isoformat(),
-                        "last_activity": p.last_activity.isoformat() if p.last_activity else None
-                    }
-                    for p in projects
-                ],
-                "total": total,
-                "page": page,
-                "size": size,
-                "pages": (total + size - 1) // size
-            }
-        )
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"获取项目列表失败: {str(e)}"
-        )
+        projects.append(project_dict)
+    
+    return success_response({
+        "projects": projects,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size
+    })
 
 
-@router.get("/projects/{project_key}", summary="获取项目详情")
-async def get_project(project_key: str):
+@router.get("/projects/{project_key}")
+async def get_project(
+    project_key: str = Path(..., description="项目标识"),
+    db = Depends(get_database)
+):
     """获取项目详情"""
-    try:
-        service = ProjectService()
-        project = await service.get_project_by_key(project_key)
-        
-        if not project:
-            return error_response(
-                ErrorCode.PROJECT_NOT_FOUND,
-                "项目不存在"
-            )
-        
-        return success_response(
-            data={
-                "project_key": project.project_key,
-                "name": project.name,
-                "description": project.description,
-                "framework": project.framework,
-                "base_url": project.base_url,
-                "status": project.status,
-                "config": project.config,
-                "created_at": project.created_at.isoformat(),
-                "updated_at": project.updated_at.isoformat(),
-                "last_activity": project.last_activity.isoformat() if project.last_activity else None
-            }
-        )
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"获取项目详情失败: {str(e)}"
-        )
+    logger.info(f"获取项目详情: {project_key}")
+    
+    project = await db.projects.find_one({"project_key": project_key})
+    if not project:
+        logger.warning(f"项目不存在: {project_key}")
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_key}")
+    
+    # 将MongoDB对象转换为可序列化的字典
+    result = {k: v for k, v in project.items() if k != "_id"}
+    
+    # 格式化日期时间字段
+    for date_field in ["created_at", "updated_at"]:
+        if date_field in result:
+            result[date_field] = result[date_field].isoformat()
+    
+    return success_response(result)
 
 
-@router.put("/projects/{project_key}", summary="更新项目")
-async def update_project(project_key: str, project_data: ProjectUpdate):
-    """更新项目信息"""
-    try:
-        service = ProjectService()
-        
-        # 检查项目是否存在
-        existing_project = await service.get_project_by_key(project_key)
-        if not existing_project:
-            return error_response(
-                ErrorCode.PROJECT_NOT_FOUND,
-                "项目不存在"
-            )
-        
-        # 如果要更新名称，检查新名称是否已被其他项目使用
-        if project_data.name and project_data.name != existing_project.name:
-            name_conflict = await service.get_project_by_name(project_data.name)
-            if name_conflict and name_conflict.project_key != project_key:
-                return error_response(
-                    ErrorCode.PROJECT_NAME_EXISTS,
-                    "项目名称已被其他项目使用"
-                )
-        
-        # 更新项目
-        updated_project = await service.update_project(project_key, project_data)
-        
-        return success_response(
-            data={
-                "project_key": updated_project.project_key,
-                "name": updated_project.name,
-                "description": updated_project.description,
-                "framework": updated_project.framework,
-                "base_url": updated_project.base_url,
-                "status": updated_project.status,
-                "config": updated_project.config,
-                "updated_at": updated_project.updated_at.isoformat()
-            },
-            msg="项目更新成功"
-        )
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"更新项目失败: {str(e)}"
-        )
+@router.post("/projects/")
+async def create_project(
+    project_data: dict = Body(...),
+    db = Depends(get_database)
+):
+    """创建项目"""
+    logger.info(f"创建项目: {project_data.get('name')}")
+    
+    # 生成项目标识
+    project_key = project_data.get("project_key") or f"proj_{uuid.uuid4().hex[:8]}"
+    
+    # 检查项目标识是否已存在
+    existing_project = await db.projects.find_one({"project_key": project_key})
+    if existing_project:
+        logger.warning(f"项目标识已存在: {project_key}")
+        raise HTTPException(status_code=400, detail=f"项目标识已存在: {project_key}")
+    
+    # 创建项目记录
+    project = {
+        "project_key": project_key,
+        "name": project_data.get("name"),
+        "description": project_data.get("description"),
+        "framework": project_data.get("framework"),
+        "api_key": project_data.get("api_key") or str(uuid.uuid4()),
+        "status": project_data.get("status", "active"),
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    await db.projects.insert_one(project)
+    
+    # 将MongoDB对象转换为可序列化的字典
+    result = {k: v for k, v in project.items() if k != "_id"}
+    
+    # 格式化日期时间字段
+    for date_field in ["created_at", "updated_at"]:
+        result[date_field] = result[date_field].isoformat()
+    
+    return success_response(result)
 
 
-@router.delete("/projects/{project_key}", summary="删除项目")
-async def delete_project(project_key: str):
-    """删除项目（软删除）"""
-    try:
-        service = ProjectService()
-        
-        # 检查项目是否存在
-        existing_project = await service.get_project_by_key(project_key)
-        if not existing_project:
-            return error_response(
-                ErrorCode.PROJECT_NOT_FOUND,
-                "项目不存在"
-            )
-        
-        # 执行软删除（将状态改为archived）
-        await service.archive_project(project_key)
-        
-        return success_response(msg="项目已归档")
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"删除项目失败: {str(e)}"
-        )
+@router.put("/projects/{project_key}")
+async def update_project(
+    project_key: str = Path(..., description="项目标识"),
+    project_data: dict = Body(...),
+    db = Depends(get_database)
+):
+    """更新项目"""
+    logger.info(f"更新项目: {project_key}")
+    
+    # 检查项目是否存在
+    project = await db.projects.find_one({"project_key": project_key})
+    if not project:
+        logger.warning(f"项目不存在: {project_key}")
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_key}")
+    
+    # 更新项目记录
+    update_data = {
+        "updated_at": datetime.utcnow()
+    }
+    
+    for field in ["name", "description", "framework", "api_key", "status"]:
+        if field in project_data:
+            update_data[field] = project_data[field]
+    
+    await db.projects.update_one(
+        {"project_key": project_key},
+        {"$set": update_data}
+    )
+    
+    # 获取更新后的项目
+    updated_project = await db.projects.find_one({"project_key": project_key})
+    
+    # 将MongoDB对象转换为可序列化的字典
+    result = {k: v for k, v in updated_project.items() if k != "_id"}
+    
+    # 格式化日期时间字段
+    for date_field in ["created_at", "updated_at"]:
+        result[date_field] = result[date_field].isoformat()
+    
+    return success_response(result)
 
 
-@router.get("/projects/{project_key}/stats", summary="获取项目统计信息")
-async def get_project_stats(project_key: str):
-    """获取项目统计信息"""
-    try:
-        service = ProjectService()
-        
-        # 检查项目是否存在
-        project = await service.get_project_by_key(project_key)
-        if not project:
-            return error_response(
-                ErrorCode.PROJECT_NOT_FOUND,
-                "项目不存在"
-            )
-        
-        # 获取统计信息
-        stats = await service.get_project_stats(project_key)
-        
-        return success_response(data=stats)
-        
-    except Exception as e:
-        return error_response(
-            ErrorCode.SYSTEM_ERROR,
-            f"获取项目统计失败: {str(e)}"
-        )
+@router.delete("/projects/{project_key}")
+async def delete_project(
+    project_key: str = Path(..., description="项目标识"),
+    db = Depends(get_database)
+):
+    """删除项目"""
+    logger.info(f"删除项目: {project_key}")
+    
+    # 检查项目是否存在
+    project = await db.projects.find_one({"project_key": project_key})
+    if not project:
+        logger.warning(f"项目不存在: {project_key}")
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_key}")
+    
+    # 删除项目
+    await db.projects.delete_one({"project_key": project_key})
+    
+    return success_response({"message": "项目删除成功"})
+
+
+@router.get("/projects/{project_key}/stats")
+async def get_project_stats(
+    project_key: str = Path(..., description="项目标识"),
+    db = Depends(get_database)
+):
+    """获取项目统计数据"""
+    logger.info(f"获取项目统计数据: {project_key}")
+    
+    # 检查项目是否存在
+    project = await db.projects.find_one({"project_key": project_key})
+    if not project:
+        logger.warning(f"项目不存在: {project_key}")
+        raise HTTPException(status_code=404, detail=f"项目不存在: {project_key}")
+    
+    # 查询性能记录总数
+    performance_count = await db.performance_records.count_documents({"project_key": project_key})
+    
+    # 查询最近24小时的请求数
+    today = datetime.utcnow()
+    yesterday = today - timedelta(days=1)
+    today_requests = await db.performance_records.count_documents({
+        "project_key": project_key,
+        "timestamp": {"$gte": yesterday}
+    })
+    
+    # 查询平均响应时间
+    pipeline = [
+        {"$match": {"project_key": project_key}},
+        {"$group": {
+            "_id": None,
+            "avg_response_time": {"$avg": "$performance_metrics.total_duration"}
+        }}
+    ]
+    avg_result = await db.performance_records.aggregate(pipeline).to_list(1)
+    avg_response_time = avg_result[0]["avg_response_time"] if avg_result else 0
+    
+    # 查询错误率
+    error_count = await db.performance_records.count_documents({
+        "project_key": project_key,
+        "response_info.status_code": {"$gte": 400}
+    })
+    
+    error_rate = (error_count / performance_count * 100) if performance_count > 0 else 0
+    
+    # 计算性能评分
+    performance_score = 100 - (error_rate * 0.5) - min(avg_response_time * 1000 / 10, 50)
+    
+    return success_response({
+        "project_key": project_key,
+        "name": project.get("name"),
+        "total_records": performance_count,
+        "today_requests": today_requests,
+        "avg_response_time": avg_response_time,
+        "error_rate": error_rate,
+        "performance_score": performance_score
+    })

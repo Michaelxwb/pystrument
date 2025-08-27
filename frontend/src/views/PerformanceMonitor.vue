@@ -803,16 +803,22 @@ const triggerAIAnalysis = async (record: any) => {
           ElMessage.success('AI分析完成')
         } else if (statusResponse.data.status === 'FAILURE') {
           ElMessage.error('AI分析失败')
-        } else {
+        } else if (statusResponse.data.status === 'IN_PROGRESS') {
+          // 如果还在处理中，继续轮询
           setTimeout(checkResult, 3000) // 3秒后再检查
+        } else {
+          // 其他状态也继续轮询
+          setTimeout(checkResult, 3000)
         }
       } catch (error) {
+        console.error('检查分析状态失败:', error)
         ElMessage.error('检查分析状态失败')
       }
     }
     
     setTimeout(checkResult, 3000)
   } catch (error) {
+    console.error('触发AI分析失败:', error)
     ElMessage.error('触发AI分析失败')
   } finally {
     record.analyzing = false

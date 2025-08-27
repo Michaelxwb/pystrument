@@ -58,7 +58,7 @@ setup_response_middleware(app)
 app.include_router(projects.router, prefix="/api/v1", tags=["项目管理"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["性能数据"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["AI分析"])
-app.include_router(dashboard.router, prefix="/api/v1", tags=["仪表盘"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["仪表盘"])
 
 
 @app.get("/")

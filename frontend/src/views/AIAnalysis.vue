@@ -4,12 +4,13 @@
       <div class="header-left">
         <el-button
           type="text"
-          @click="$router.back()"
+          @click="goBack"
           style="padding: 0; margin-right: 16px;"
         >
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
         <h2>AI性能分析报告</h2>
+        <span v-if="projectName" class="project-name">{{ projectName }}</span>
       </div>
       <div class="header-actions">
         <el-button
@@ -21,14 +22,18 @@
           <el-icon><MagicStick /></el-icon>
           开始分析
         </el-button>
-        <el-button
-          v-else
-          type="success"
-          @click="exportReport"
-        >
-          <el-icon><Download /></el-icon>
-          导出报告
-        </el-button>
+        <el-dropdown v-else @command="handleExportCommand" trigger="click">
+          <el-button type="success">
+            <el-icon><Download /></el-icon>
+            导出报告
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="json">JSON格式</el-dropdown-item>
+              <el-dropdown-item command="pdf">PDF格式</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -123,7 +128,7 @@
         <el-card>
           <template #header>
             <div class="section-header">
-              <el-icon><Lightbulb /></el-icon>
+              <el-icon><Bulb /></el-icon>
               <span>优化建议</span>
               <el-tag type="primary" size="small">
                 {{ analysisData.optimization_suggestions?.length || 0 }} 条建议
@@ -189,7 +194,7 @@
         <el-card>
           <template #header>
             <div class="section-header">
-              <el-icon><ShieldAlert /></el-icon>
+              <el-icon><Shield /></el-icon>
               <span>风险评估</span>
             </div>
           </template>
@@ -300,7 +305,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -309,15 +314,17 @@ import {
   Download,
   Loading,
   Warning,
-  Lightbulb,
-  ShieldAlert,
+  MagicStick as Bulb,
+  WarnTriangleFilled as Shield,
   SuccessFilled,
   InfoFilled,
   Close
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { analysisApi } from '@/api/analysis'
+import { projectApi } from '@/api/project'
 import type { AnalysisRecord, AnalysisResults } from '@/types/analysis'
+import { generateAnalysisReportPDF } from '@/utils/reportGenerator'
 
 // 定义组件名称
 defineOptions({
@@ -332,35 +339,104 @@ const loading = ref(false)
 const analyzing = ref(false)
 const analyzeProgress = ref(0)
 const error = ref('')
-const analysisData = ref<AnalysisResults | null>(null)
+const analysisData = ref<any | null>(null)
 const analysisRecord = ref<AnalysisRecord | null>(null)
 const activeSuggestions = ref<number[]>([])
+const projectName = ref('')
 
 // 图表引用
 const scoreChartRef = ref<HTMLElement>()
 let scoreChart: echarts.ECharts | null = null
 
 // 获取路由参数
-const performanceRecordId = route.params.id as string
+const performanceRecordId = computed(() => route.params.id as string)
+const fromAnalysisList = computed(() => route.query.from === 'analysis-list')
 
 // 方法
 const loadAnalysisData = async () => {
   loading.value = true
   try {
-    // 查找已存在的分析记录
-    const response = await analysisApi.getAnalysisHistory(
-      performanceRecordId,
-      { page: 1, size: 1 }
-    )
+    // 从路由查询参数获取项目名称
+    if (route.query.projectName) {
+      projectName.value = route.query.projectName as string
+    }
     
-    if (response.data.records?.length > 0) {
-      const record = response.data.records[0]
-      analysisRecord.value = record
-      analysisData.value = record.results
+    // 如果是从分析列表页面跳转过来，直接获取分析结果
+    if (fromAnalysisList.value) {
+      const response = await analysisApi.getAnalysisResult(performanceRecordId.value)
       
-      if (analysisData.value) {
-        await nextTick()
-        initScoreChart()
+      if (response.data) {
+        analysisRecord.value = response.data
+        
+        // 处理分析结果，确保数据格式一致
+        if (response.data.results) {
+          analysisData.value = {
+            performance_score: response.data.results.performance_score,
+            bottleneck_analysis: response.data.results.bottlenecks || [],
+            optimization_suggestions: response.data.results.recommendations ? response.data.results.recommendations.map((item: string, index: number) => ({
+              priority: index < 1 ? 'high' : index < 3 ? 'medium' : 'low',
+              title: item,
+              description: item,
+              category: 'general'
+            })) : [],
+            risk_assessment: {
+              current_risks: [],
+              potential_issues: [],
+              recommendations: []
+            },
+            summary: response.data.results.summary
+          }
+        }
+        
+        // 如果有项目信息，更新项目名称
+        if (response.data.project_key && !projectName.value) {
+          try {
+            const projectResponse = await projectApi.getProjectDetail(response.data.project_key)
+            if (projectResponse.data) {
+              projectName.value = projectResponse.data.name
+            }
+          } catch (err) {
+            console.log('获取项目信息失败', err)
+          }
+        }
+        
+        if (analysisData.value) {
+          await nextTick()
+          initScoreChart()
+        }
+      }
+    } else {
+      // 查找已存在的分析记录
+      try {
+        // 构造分析ID并尝试获取结果
+        const analysisId = performanceRecordId.value
+        if (analysisId.startsWith('analysis_')) {
+          const response = await analysisApi.getAnalysisResult(analysisId)
+          
+          if (response.data) {
+            analysisRecord.value = response.data
+            analysisData.value = response.data.results || null
+            
+            // 如果有项目信息，更新项目名称
+            if (response.data.project_key && !projectName.value) {
+              try {
+                const projectResponse = await projectApi.getProjectDetail(response.data.project_key)
+                if (projectResponse.data) {
+                  projectName.value = projectResponse.data.name
+                }
+              } catch (err) {
+                console.log('获取项目信息失败', err)
+              }
+            }
+            
+            if (analysisData.value) {
+              await nextTick()
+              initScoreChart()
+            }
+          }
+        }
+      } catch (err) {
+        console.log('未找到现有分析结果，可能需要触发新分析')
       }
     }
   } catch (error) {
@@ -376,7 +452,7 @@ const triggerAnalysis = async () => {
   error.value = ''
   
   try {
-    const response = await analysisApi.triggerAnalysis(performanceRecordId, {
+    const response = await analysisApi.triggerAnalysis(performanceRecordId.value, {
       ai_service: 'default',
       priority: 'normal'
     })
@@ -389,22 +465,55 @@ const triggerAnalysis = async () => {
         const statusResponse = await analysisApi.getTaskStatus(taskId)
         const status = statusResponse.data
         
-        if (status.meta?.progress) {
-          analyzeProgress.value = status.meta.progress
+        if (status.progress) {
+          analyzeProgress.value = status.progress
         }
         
         if (status.status === 'SUCCESS') {
           analyzing.value = false
           ElMessage.success('AI分析完成')
-          await loadAnalysisData()
-        } else if (status.status === 'FAILURE') {
+          // 获取分析结果
+          if (status.analysis_id) {
+            const resultResponse = await analysisApi.getAnalysisResult(status.analysis_id)
+            if (resultResponse.data) {
+              analysisRecord.value = resultResponse.data
+              
+              // 处理分析结果，确保数据格式一致
+              if (resultResponse.data.results) {
+                analysisData.value = {
+                  performance_score: resultResponse.data.results.performance_score,
+                  bottleneck_analysis: resultResponse.data.results.bottlenecks || [],
+                  optimization_suggestions: resultResponse.data.results.recommendations ? resultResponse.data.results.recommendations.map((item: string, index: number) => ({
+                    priority: index < 1 ? 'high' : index < 3 ? 'medium' : 'low',
+                    title: item,
+                    description: item,
+                    category: 'general'
+                  })) : [],
+                  risk_assessment: {
+                    current_risks: [],
+                    potential_issues: [],
+                    recommendations: []
+                  },
+                  summary: resultResponse.data.results.summary
+                }
+              }
+              
+              if (analysisData.value) {
+                await nextTick()
+                initScoreChart()
+              }
+            }
+          }
+        } else if (status.status === 'FAILURE' || status.status === 'CANCELED') {
           analyzing.value = false
-          error.value = status.traceback || '分析失败'
+          error.value = status.error || '分析失败'
           ElMessage.error('AI分析失败')
         } else {
+          // 继续轮询
           setTimeout(pollStatus, 2000) // 2秒后再检查
         }
       } catch (error) {
+        console.error('检查分析状态失败:', error)
         analyzing.value = false
         error.value = '检查分析状态失败'
         ElMessage.error('检查分析状态失败')
@@ -413,6 +522,7 @@ const triggerAnalysis = async () => {
     
     setTimeout(pollStatus, 2000)
   } catch (error) {
+    console.error('触发分析失败:', error)
     analyzing.value = false
     error.value = '触发分析失败'
     ElMessage.error('触发AI分析失败')
@@ -424,28 +534,48 @@ const retryAnalysis = () => {
   triggerAnalysis()
 }
 
-const exportReport = () => {
-  // 导出报告逻辑
-  const reportData = {
-    performance_score: analysisData.value?.performance_score,
-    bottlenecks: analysisData.value?.bottleneck_analysis,
-    suggestions: analysisData.value?.optimization_suggestions,
-    risks: analysisData.value?.risk_assessment,
-    analysis_time: analysisRecord.value?.created_at
+const exportReport = (format: 'json' | 'pdf' = 'json') => {
+  if (!analysisData.value || !analysisRecord.value) {
+    ElMessage.warning('暂无分析数据可导出')
+    return
   }
   
-  const blob = new Blob([JSON.stringify(reportData, null, 2)], {
-    type: 'application/json'
-  })
-  
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `performance-analysis-${performanceRecordId}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-  
-  ElMessage.success('报告导出成功')
+  try {
+    if (format === 'pdf') {
+      // 生成PDF报告
+      generateAnalysisReportPDF(analysisRecord.value, projectName.value)
+      ElMessage.success('PDF报告生成并下载成功')
+    } else {
+      // 导出JSON报告逻辑
+      const reportData = {
+        performance_score: analysisData.value?.performance_score,
+        bottlenecks: analysisData.value?.bottleneck_analysis,
+        suggestions: analysisData.value?.optimization_suggestions,
+        risks: analysisData.value?.risk_assessment,
+        analysis_time: analysisRecord.value?.created_at
+      }
+      
+      const blob = new Blob([JSON.stringify(reportData, null, 2)], {
+        type: 'application/json'
+      })
+      
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `performance-analysis-${performanceRecordId.value}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      
+      ElMessage.success('JSON报告导出成功')
+    }
+  } catch (error) {
+    console.error('导出报告失败:', error)
+    ElMessage.error('导出报告失败')
+  }
+}
+
+const handleExportCommand = (command: 'json' | 'pdf') => {
+  exportReport(command)
 }
 
 const initScoreChart = () => {
@@ -636,6 +766,15 @@ const formatDateTime = (dateString?: string) => {
   return new Date(dateString).toLocaleString('zh-CN')
 }
 
+// 返回上一页
+const goBack = () => {
+  if (fromAnalysisList.value) {
+    router.push('/analysis')
+  } else {
+    router.back()
+  }
+}
+
 // 生命周期
 onMounted(async () => {
   await loadAnalysisData()
@@ -664,6 +803,12 @@ onMounted(async () => {
 .header-left h2 {
   margin: 0;
   color: #303133;
+}
+
+.page-header .project-name {
+  margin-left: 12px;
+  color: #909399;
+  font-size: 16px;
 }
 
 .loading-container,

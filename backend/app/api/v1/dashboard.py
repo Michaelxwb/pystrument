@@ -14,7 +14,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/dashboard/stats", summary="获取仪表盘统计数据")
+@router.get("/stats", summary="获取仪表盘统计数据")
 async def get_dashboard_stats():
     """获取仪表盘统计数据"""
     try:
@@ -51,7 +51,7 @@ async def get_dashboard_stats():
         )
 
 
-@router.get("/dashboard/recent-projects", summary="获取最近活跃项目")
+@router.get("/recent-projects", summary="获取最近活跃项目")
 async def get_recent_projects(limit: int = 5):
     """获取最近活跃的项目"""
     try:
@@ -81,7 +81,7 @@ async def get_recent_projects(limit: int = 5):
         )
 
 
-@router.get("/dashboard/recent-analysis", summary="获取最近分析结果")
+@router.get("/recent-analysis", summary="获取最近分析结果")
 async def get_recent_analysis(limit: int = 5):
     """获取最近的分析结果"""
     try:
@@ -99,7 +99,7 @@ async def get_recent_analysis(limit: int = 5):
         )
 
 
-@router.get("/dashboard/system-info", summary="获取系统信息")
+@router.get("/system-info", summary="获取系统信息")
 async def get_system_info():
     """获取系统信息"""
     try:
@@ -131,7 +131,7 @@ async def get_system_info():
         )
 
 
-@router.get("/dashboard/performance-trends", summary="获取性能趋势数据")
+@router.get("/performance-trends", summary="获取性能趋势数据")
 async def get_performance_trends(time_range: str = "7d"):
     """获取性能趋势数据"""
     try:

@@ -3,12 +3,15 @@
 export interface AnalysisRequest {
   ai_service?: string
   priority?: 'high' | 'normal' | 'low'
+  parameters?: Record<string, any>
 }
 
 export interface BatchAnalysisRequest {
-  performance_record_ids: string[]
+  project_key: string
+  record_ids: string[]
   ai_service?: string
   priority?: 'high' | 'normal' | 'low'
+  parameters?: Record<string, any>
 }
 
 export interface BottleneckAnalysis {
@@ -17,6 +20,7 @@ export interface BottleneckAnalysis {
   function: string
   description: string
   impact: number
+  recommendations?: string[]
 }
 
 export interface OptimizationSuggestion {
@@ -35,36 +39,35 @@ export interface RiskAssessment {
 }
 
 export interface AnalysisResults {
+  summary: string
   performance_score: number
-  bottleneck_analysis: BottleneckAnalysis[]
-  optimization_suggestions: OptimizationSuggestion[]
-  risk_assessment: RiskAssessment
+  bottlenecks: BottleneckAnalysis[]
+  recommendations: string[]
+  details?: Record<string, any>
 }
 
 export interface AnalysisRecord {
-  id: string
+  analysis_id: string
   performance_record_id: string
   project_key: string
-  analysis_type: string
   ai_service: string
-  results: AnalysisResults
-  task_id?: string
-  status: 'processing' | 'completed' | 'failed'
-  error_message?: string
+  results?: AnalysisResults
+  task_id: string
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILURE' | 'CANCELED'
   created_at: string
-  completed_at?: string
+  updated_at: string
+  priority: 'high' | 'normal' | 'low'
 }
 
 export interface TaskStatus {
   task_id: string
-  status: 'PENDING' | 'PROGRESS' | 'SUCCESS' | 'FAILURE'
-  result?: any
-  traceback?: string
-  meta?: {
-    step?: string
-    progress?: number
-    [key: string]: any
-  }
+  status: 'PENDING' | 'IN_PROGRESS' | 'SUCCESS' | 'FAILURE' | 'CANCELED'
+  progress: number
+  analysis_id?: string
+  created_at: string
+  updated_at: string
+  estimated_completion?: string
+  error?: string
 }
 
 export interface AnalysisHistory {
