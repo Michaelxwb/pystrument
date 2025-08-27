@@ -262,12 +262,14 @@ class PerformanceService:
         date_format: str
     ) -> List[Dict[str, Any]]:
         """获取响应时间趋势数据"""
+        # 构建查询条件
+        match_condition = {"timestamp": {"$gte": start_time}}
+        if project_key:  # 如果项目密钥不为空，才添加到查询条件中
+            match_condition["project_key"] = project_key
+            
         pipeline = [
             {
-                "$match": {
-                    "project_key": project_key,
-                    "timestamp": {"$gte": start_time}
-                }
+                "$match": match_condition
             },
             {
                 "$group": {
@@ -306,12 +308,14 @@ class PerformanceService:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """获取接口性能分布数据"""
+        # 构建查询条件
+        match_condition = {"timestamp": {"$gte": start_time}}
+        if project_key:  # 如果项目密钥不为空，才添加到查询条件中
+            match_condition["project_key"] = project_key
+            
         pipeline = [
             {
-                "$match": {
-                    "project_key": project_key,
-                    "timestamp": {"$gte": start_time}
-                }
+                "$match": match_condition
             },
             {
                 "$group": {

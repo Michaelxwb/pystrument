@@ -4,12 +4,14 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
+import logging
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.project_service import ProjectService
 from app.services.performance_service import PerformanceService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/dashboard/stats", summary="获取仪表盘统计数据")
@@ -126,6 +128,50 @@ async def get_system_info():
         return error_response(
             ErrorCode.SYSTEM_ERROR,
             f"获取系统信息失败: {str(e)}"
+        )
+
+
+@router.get("/dashboard/performance-trends", summary="获取性能趋势数据")
+async def get_performance_trends(time_range: str = "7d"):
+    """获取性能趋势数据"""
+    try:
+        performance_service = PerformanceService()
+        
+        # 计算开始时间
+        now = datetime.utcnow()
+        if time_range == "1h":
+            start_time = now - timedelta(hours=1)
+        elif time_range == "6h":
+            start_time = now - timedelta(hours=6)
+        elif time_range == "24h":
+            start_time = now - timedelta(hours=24)
+        elif time_range == "7d":
+            start_time = now - timedelta(days=7)
+        elif time_range == "30d":
+            start_time = now - timedelta(days=30)
+        else:
+            start_time = now - timedelta(days=7)  # 默认7天
+        
+        # 日志记录请求信息
+        logger.info(f"获取性能趋势数据: time_range={time_range}, start_time={start_time.isoformat()}")
+        
+        # 获取性能趋势数据
+        trends_data = await performance_service.get_performance_trends(
+            project_key="",  # 空字符串表示获取所有项目的趋势数据
+            start_time=start_time,
+            time_range=time_range
+        )
+        
+        # 日志记录结果
+        logger.info(f"性能趋势数据结果: response_times={len(trends_data.get('response_times', []))}, endpoint_stats={len(trends_data.get('endpoint_stats', []))}")
+        
+        return success_response(data=trends_data)
+        
+    except Exception as e:
+        logger.error(f"获取性能趋势数据失败: {str(e)}")
+        return error_response(
+            ErrorCode.SYSTEM_ERROR,
+            f"获取性能趋势数据失败: {str(e)}"
         )
 
 

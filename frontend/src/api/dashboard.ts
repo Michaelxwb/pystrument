@@ -40,5 +40,26 @@ export const dashboardApi = {
       db_status: string
       redis_status: string
     }>('/v1/dashboard/system-info')
+  },
+  
+  // 获取性能趋势数据
+  getPerformanceTrends(timeRange: string = '7d') {
+    return http.get<{
+      response_times: Array<{
+        time: string
+        avg_duration: number
+        request_count: number
+        max_duration: number
+        min_duration: number
+      }>
+      endpoint_stats: Array<{
+        path: string
+        avg_duration: number
+        request_count: number
+        total_duration: number
+      }>
+    }>('/v1/dashboard/performance-trends', {
+      time_range: timeRange
+    })
   }
 }

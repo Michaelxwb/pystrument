@@ -168,32 +168,32 @@
             
             <el-table-column prop="request_info.path" label="接口路径" min-width="200">
               <template #default="{ row }">
-                <el-tag :type="getMethodTagType(row.request_info.method)" size="small">
-                  {{ row.request_info.method }}
+                <el-tag :type="getMethodTagType(row.request_method || 'GET')" size="small">
+                  {{ row.request_method || 'GET' }}
                 </el-tag>
-                <span style="margin-left: 8px;">{{ row.request_info.path }}</span>
+                <span style="margin-left: 8px;">{{ row.request_path || '/' }}</span>
               </template>
             </el-table-column>
             
             <el-table-column prop="response_info.status_code" label="状态码" width="100">
               <template #default="{ row }">
-                <el-tag :type="getStatusTagType(row.response_info.status_code)" size="small">
-                  {{ row.response_info.status_code }}
+                <el-tag :type="getStatusTagType(row.status_code || 200)" size="small">
+                  {{ row.status_code || 200 }}
                 </el-tag>
               </template>
             </el-table-column>
             
             <el-table-column prop="performance_metrics.total_duration" label="响应时间" width="120">
               <template #default="{ row }">
-                <span :class="getDurationClass(row.performance_metrics.total_duration)">
-                  {{ (row.performance_metrics.total_duration * 1000).toFixed(2) }}ms
+                <span :class="getDurationClass(row.duration || 0)">
+                  {{ ((row.duration || 0) * 1000).toFixed(2) }}ms
                 </span>
               </template>
             </el-table-column>
             
             <el-table-column prop="performance_metrics.memory_usage.peak_memory" label="内存使用" width="120">
               <template #default="{ row }">
-                {{ (row.performance_metrics.memory_usage?.peak_memory || 0).toFixed(1) }}MB
+                {{ (row.memory_peak || 0).toFixed(1) }}MB
               </template>
             </el-table-column>
             
@@ -256,11 +256,17 @@
       width="80%"
       top="5vh"
     >
-      <performance-details
-        v-if="selectedRecord"
-        :record="selectedRecord"
-        @close="showDetailsDialog = false"
-      />
+      <div v-if="showDetailsDialog" class="detail-loading-container">
+        <el-skeleton v-if="detailLoading" :rows="10" animated />
+        <performance-details
+          v-else-if="detailRecord"
+          :record="detailRecord"
+          @close="showDetailsDialog = false"
+        />
+        <div v-else class="no-data">
+          <el-empty description="无法加载详情数据" />
+        </div>
+      </div>
     </el-dialog>
 
     <!-- 调用链对话框 -->
@@ -270,11 +276,17 @@
       width="90%"
       top="5vh"
     >
-      <call-trace-viewer
-        v-if="selectedRecord"
-        :record="selectedRecord"
-        @close="showCallTraceDialog = false"
-      />
+      <div v-if="showCallTraceDialog" class="detail-loading-container">
+        <el-skeleton v-if="detailLoading" :rows="10" animated />
+        <call-trace-viewer
+          v-else-if="detailRecord"
+          :record="detailRecord"
+          @close="showCallTraceDialog = false"
+        />
+        <div v-else class="no-data">
+          <el-empty description="无法加载调用链数据" />
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -306,6 +318,8 @@ const selectedProject = ref('')
 const tableLoading = ref(false)
 const performanceData = ref<PerformanceRecord[]>([])
 const selectedRecord = ref<PerformanceRecord | null>(null)
+const detailRecord = ref<PerformanceRecord | null>(null)
+const detailLoading = ref(false)
 const showDetailsDialog = ref(false)
 const showCallTraceDialog = ref(false)
 const timeRange = ref('24h')
@@ -401,12 +415,22 @@ const loadPerformanceData = async () => {
     
     const response = await performanceApi.getPerformanceRecords(params)
     
+    // 确保每条记录都有必要的字段
     performanceData.value = response.data.records.map(record => ({
       ...record,
-      analyzing: false
+      analyzing: false,
+      ai_analysis: false,
+      // 设置默认值，避免因缺少属性而出错
+      request_method: record.request_method || 'GET',
+      request_path: record.request_path || '/',
+      status_code: record.status_code || 200,
+      duration: record.duration || 0,
+      memory_peak: record.memory_peak || 0
     }))
+    
     tablePagination.total = response.data.total
   } catch (error) {
+    console.error('加载性能数据失败:', error)
     ElMessage.error('加载性能数据失败')
   } finally {
     tableLoading.value = false
@@ -534,20 +558,47 @@ const refreshData = () => {
   onProjectChange()
 }
 
-const viewDetails = (record: PerformanceRecord) => {
+const viewDetails = async (record: any) => {
+  // 保存选中记录，并显示详情对话框
   selectedRecord.value = record
   showDetailsDialog.value = true
+  detailLoading.value = true
+  
+  try {
+    // 使用 trace_id 获取完整详情
+    const response = await performanceApi.getRecordDetail(record.trace_id)
+    detailRecord.value = response.data
+  } catch (error) {
+    console.error('获取性能记录详情失败:', error)
+    ElMessage.error('获取性能记录详情失败')
+  } finally {
+    detailLoading.value = false
+  }
 }
 
-const viewCallTrace = (record: PerformanceRecord) => {
+const viewCallTrace = async (record: any) => {
+  // 保存选中记录，并显示调用链对话框
   selectedRecord.value = record
   showCallTraceDialog.value = true
+  detailLoading.value = true
+  
+  try {
+    // 使用 trace_id 获取完整详情
+    const response = await performanceApi.getRecordDetail(record.trace_id)
+    detailRecord.value = response.data
+  } catch (error) {
+    console.error('获取性能记录详情失败:', error)
+    ElMessage.error('获取性能记录详情失败')
+  } finally {
+    detailLoading.value = false
+  }
 }
 
-const triggerAIAnalysis = async (record: PerformanceRecord) => {
+const triggerAIAnalysis = async (record: any) => {
   record.analyzing = true
   try {
-    const response = await analysisApi.triggerAnalysis(record.id, {
+    // 使用 trace_id 作为记录ID
+    const response = await analysisApi.triggerAnalysis(record.trace_id, {
       ai_service: 'default',
       priority: 'normal'
     })
@@ -579,8 +630,9 @@ const triggerAIAnalysis = async (record: PerformanceRecord) => {
   }
 }
 
-const viewAIAnalysis = (record: PerformanceRecord) => {
-  router.push(`/analysis/${record.id}`)
+const viewAIAnalysis = (record: any) => {
+  // 使用 trace_id 作为记录ID
+  router.push(`/analysis/${record.trace_id}`)
 }
 
 // 辅助方法
@@ -650,70 +702,57 @@ onMounted(async () => {
   text-align: center;
 }
 
-.metric-item {
-  padding: 10px;
+.metric-card .el-card__body {
+  padding: 20px;
 }
 
 .metric-value {
   font-size: 28px;
   font-weight: bold;
-  color: #409eff;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .metric-label {
+  color: #909399;
   font-size: 14px;
-  color: #606266;
-  margin-bottom: 8px;
 }
 
 .metric-trend {
+  margin-top: 10px;
   font-size: 12px;
 }
 
-.trend-up {
-  color: #67c23a;
-}
-
-.trend-down {
+.metric-trend.up {
   color: #f56c6c;
 }
 
-.charts-section {
+.metric-trend.down {
+  color: #67c23a;
+}
+
+.chart-container {
   margin-bottom: 20px;
 }
 
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.table-filter {
+  margin-bottom: 20px;
 }
 
-.performance-table {
-  background: white;
-  border-radius: 8px;
-}
-
-.table-header {
+.table-filter-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-filters {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .table-pagination {
-  display: flex;
-  justify-content: center;
   margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .duration-fast {
   color: #67c23a;
-  font-weight: bold;
 }
 
 .duration-normal {
@@ -722,11 +761,22 @@ onMounted(async () => {
 
 .duration-slow {
   color: #e6a23c;
-  font-weight: bold;
 }
 
 .duration-very-slow {
   color: #f56c6c;
   font-weight: bold;
+}
+
+.detail-loading-container {
+  min-height: 300px;
+  padding: 20px;
+}
+
+.no-data {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
 }
 </style>

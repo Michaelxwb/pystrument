@@ -51,12 +51,12 @@
     <el-row :gutter="20" style="margin-top: 20px;">
       <!-- 性能趋势图 -->
       <el-col :span="16">
-        <el-card>
+        <el-card v-loading="loading.trends">
           <template #header>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span>性能趋势</span>
-              <el-select v-model="timeRange" style="width: 120px;">
-                <el-option label="今天" value="today" />
+              <el-select v-model="timeRange" @change="loadPerformanceTrends" style="width: 120px;">
+                <el-option label="今天" value="24h" />
                 <el-option label="7天" value="7d" />
                 <el-option label="30天" value="30d" />
               </el-select>
@@ -160,10 +160,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { dashboardApi } from '@/api/dashboard'
+import * as echarts from 'echarts'
 
 // 定义组件名称
 defineOptions({
@@ -173,13 +174,15 @@ defineOptions({
 // 响应式数据
 const timeRange = ref('7d')
 const performanceChart = ref()
+let chartInstance: echarts.ECharts | null = null
 
 // 加载状态
 const loading = ref({
   stats: false,
   projects: false,
   analysis: false,
-  systemInfo: false
+  systemInfo: false,
+  trends: false
 })
 
 // 统计数据
@@ -233,6 +236,12 @@ onUnmounted(() => {
     clearInterval(autoRefreshTimer)
     autoRefreshTimer = null
   }
+  
+  // 销毁图表实例
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 
 // 加载所有数据
@@ -241,7 +250,7 @@ const loadAllData = () => {
   loadRecentProjects()
   loadRecentAnalysis()
   loadSystemInfo()
-  initChart()
+  loadPerformanceTrends()
 }
 
 // 加载统计数据
@@ -312,6 +321,145 @@ const loadSystemInfo = async () => {
   }
 }
 
+// 加载性能趋势数据
+const loadPerformanceTrends = async () => {
+  loading.value.trends = true
+  try {
+    const response = await dashboardApi.getPerformanceTrends(timeRange.value)
+    await nextTick()
+    if (response.data.response_times && response.data.response_times.length > 0) {
+      renderChart(response.data.response_times)
+    } else {
+      // 如果没有数据，显示空图表
+      renderEmptyChart()
+    }
+  } catch (error) {
+    console.error('加载性能趋势数据失败:', error)
+    ElMessage.error('加载性能趋势数据失败')
+    renderEmptyChart()
+  } finally {
+    loading.value.trends = false
+  }
+}
+
+// 渲染图表
+const renderChart = (data: Array<{
+  time: string
+  avg_duration: number
+  request_count: number
+  max_duration: number
+  min_duration: number
+}>) => {
+  if (!performanceChart.value) return
+  
+  // 初始化图表实例
+  if (!chartInstance) {
+    chartInstance = echarts.init(performanceChart.value)
+  }
+  
+  // 处理数据
+  const times = data.map(item => item.time)
+  const avgDurations = data.map(item => item.avg_duration)
+  const requestCounts = data.map(item => item.request_count)
+  
+  // 配置图表选项
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'cross'
+      }
+    },
+    legend: {
+      data: ['平均响应时间(ms)', '请求数量']
+    },
+    xAxis: {
+      type: 'category',
+      data: times
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '响应时间(ms)',
+        position: 'left'
+      },
+      {
+        type: 'value',
+        name: '请求数量',
+        position: 'right'
+      }
+    ],
+    series: [
+      {
+        name: '平均响应时间(ms)',
+        type: 'line',
+        yAxisIndex: 0,
+        data: avgDurations,
+        smooth: true
+      },
+      {
+        name: '请求数量',
+        type: 'bar',
+        yAxisIndex: 1,
+        data: requestCounts,
+        barWidth: 15
+      }
+    ]
+  }
+  
+  // 设置图表选项
+  chartInstance.setOption(option, true)
+  
+  // 监听窗口大小变化，自适应图表
+  window.addEventListener('resize', () => {
+    chartInstance?.resize()
+  })
+}
+
+// 渲染空图表
+const renderEmptyChart = () => {
+  if (!performanceChart.value) return
+  
+  // 初始化图表实例
+  if (!chartInstance) {
+    chartInstance = echarts.init(performanceChart.value)
+  }
+  
+  // 配置空图表选项
+  const option = {
+    title: {
+      text: '暂无性能趋势数据',
+      x: 'center',
+      y: 'center',
+      textStyle: {
+        color: '#909399',
+        fontSize: 16,
+        fontWeight: 'normal'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: []
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '响应时间(ms)',
+        position: 'left'
+      },
+      {
+        type: 'value',
+        name: '请求数量',
+        position: 'right'
+      }
+    ],
+    series: []
+  }
+  
+  // 设置图表选项
+  chartInstance.setOption(option, true)
+}
+
 // 刷新方法
 const refreshProjects = () => loadRecentProjects()
 const refreshAnalysis = () => loadRecentAnalysis()
@@ -319,7 +467,7 @@ const refreshSystemInfo = () => loadSystemInfo()
 
 // 初始化图表
 const initChart = () => {
-  // 这里后续可以集成 ECharts
+  // 图表初始化已移至loadPerformanceTrends中
   console.log('初始化性能趋势图表')
 }
 </script>
