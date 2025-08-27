@@ -163,7 +163,15 @@ async def get_performance_trends(time_range: str = "7d"):
         )
         
         # 日志记录结果
-        logger.info(f"性能趋势数据结果: response_times={len(trends_data.get('response_times', []))}, endpoint_stats={len(trends_data.get('endpoint_stats', []))}")
+        response_times_count = len(trends_data.get('response_times', []))
+        endpoint_stats_count = len(trends_data.get('endpoint_stats', []))
+        logger.info(f"性能趋势数据结果: response_times={response_times_count}, endpoint_stats={endpoint_stats_count}")
+        
+        # 确保有空数组而不是None
+        if 'response_times' not in trends_data or trends_data['response_times'] is None:
+            trends_data['response_times'] = []
+        if 'endpoint_stats' not in trends_data or trends_data['endpoint_stats'] is None:
+            trends_data['endpoint_stats'] = []
         
         return success_response(data=trends_data)
         

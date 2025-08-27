@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Header, Depends
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
+import logging
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.models.performance import PerformanceRecord, PerformanceRecordCreate
@@ -12,6 +13,7 @@ from app.services.performance_service import PerformanceService
 from app.services.project_service import ProjectService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/collect", summary="性能数据上报")
@@ -236,21 +238,18 @@ async def get_performance_stats(
         )
 
 
-@router.get("/trends/{project_key}", summary="获取性能趋势数据")
+@router.get("/trends", summary="获取性能趋势数据")
 async def get_performance_trends(
-    project_key: str,
+    project_key: Optional[str] = Query(None, description="项目密钥，可选"),
     time_range: str = Query("24h", description="时间范围: 1h/6h/24h/7d")
 ):
     """获取项目性能趋势数据，用于图表展示"""
     try:
-        # 验证项目
-        project_service = ProjectService()
-        project = await project_service.get_project_by_key(project_key)
-        if not project:
-            return error_response(
-                ErrorCode.PROJECT_NOT_FOUND,
-                "项目不存在"
-            )
+        # 日志记录请求参数
+        logger.info(f"获取性能趋势数据请求: project_key={project_key}, time_range={time_range}")
+
+        # 不再验证项目，允许project_key为空
+        # 当project_key为空或None时，获取所有项目的数据
         
         # 计算时间范围
         time_range_map = {
@@ -271,10 +270,21 @@ async def get_performance_trends(
         # 获取趋势数据
         performance_service = PerformanceService()
         trends = await performance_service.get_performance_trends(
-            project_key=project_key,
+            project_key=project_key or "",  # 使用空字符串代替None
             start_time=start_time,
             time_range=time_range
         )
+        
+        # 添加日志，记录返回的数据信息
+        response_times_count = len(trends.get('response_times', []))
+        endpoint_stats_count = len(trends.get('endpoint_stats', []))
+        logger.info(f"性能趋势数据结果: response_times={response_times_count}, endpoint_stats={endpoint_stats_count}")
+        
+        # 确保返回空数组而不是None
+        if 'response_times' not in trends or trends['response_times'] is None:
+            trends['response_times'] = []
+        if 'endpoint_stats' not in trends or trends['endpoint_stats'] is None:
+            trends['endpoint_stats'] = []
         
         return success_response(data=trends)
         

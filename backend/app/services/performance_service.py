@@ -234,6 +234,9 @@ class PerformanceService:
                 date_format = "%Y-%m-%d"
                 interval_minutes = 1440  # 1天间隔
             
+            # 记录查询参数
+            logger.info(f"获取性能趋势数据: project_key='{project_key}', time_range={time_range}, start_time={start_time.isoformat()}")
+            
             # 获取响应时间趋势数据
             response_times = await self._get_response_time_trends(
                 project_key, start_time, date_format
@@ -244,6 +247,15 @@ class PerformanceService:
                 project_key, start_time
             )
             
+            # 记录结果
+            logger.info(f"性能趋势数据结果: response_times={len(response_times)}, endpoint_stats={len(endpoint_stats)}")
+            
+            # 确保返回空数组而不是None
+            if response_times is None:
+                response_times = []
+            if endpoint_stats is None:
+                endpoint_stats = []
+            
             return {
                 "response_times": response_times,
                 "endpoint_stats": endpoint_stats,
@@ -253,7 +265,14 @@ class PerformanceService:
             
         except Exception as e:
             logger.error(f"获取性能趋势数据失败: {str(e)}")
-            raise
+            # 返回空数据而不是抛出异常
+            return {
+                "response_times": [],
+                "endpoint_stats": [],
+                "time_range": time_range,
+                "period": f"{start_time.isoformat()} - {datetime.utcnow().isoformat()}",
+                "error": str(e)
+            }
     
     async def _get_response_time_trends(
         self,
@@ -264,8 +283,11 @@ class PerformanceService:
         """获取响应时间趋势数据"""
         # 构建查询条件
         match_condition = {"timestamp": {"$gte": start_time}}
-        if project_key:  # 如果项目密钥不为空，才添加到查询条件中
+        if project_key and project_key.strip():  # 检查项目密钥是否有效（非空且非空白字符）
             match_condition["project_key"] = project_key
+            
+        # 添加日志，记录构建的查询条件
+        logger.info(f"响应时间趋势查询条件: {match_condition}")
             
         pipeline = [
             {
@@ -310,8 +332,11 @@ class PerformanceService:
         """获取接口性能分布数据"""
         # 构建查询条件
         match_condition = {"timestamp": {"$gte": start_time}}
-        if project_key:  # 如果项目密钥不为空，才添加到查询条件中
+        if project_key and project_key.strip():  # 检查项目密钥是否有效（非空且非空白字符）
             match_condition["project_key"] = project_key
+            
+        # 添加日志，记录构建的查询条件
+        logger.info(f"接口性能分布查询条件: {match_condition}")
             
         pipeline = [
             {

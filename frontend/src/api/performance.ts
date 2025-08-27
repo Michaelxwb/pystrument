@@ -42,6 +42,12 @@ export const performanceApi = {
   
   // 获取性能趋势数据
   getPerformanceTrends(projectKey: string, timeRange: string = '24h') {
+    // 过滤掉空值项目密钥
+    const params: any = { time_range: timeRange }
+    if (projectKey && projectKey.trim()) {
+      params.project_key = projectKey
+    }
+    
     return http.get<{
       response_times: Array<{
         time: string
@@ -53,9 +59,7 @@ export const performanceApi = {
         avg_duration: number
         request_count: number
       }>
-    }>(`/v1/performance/trends/${projectKey}`, {
-      time_range: timeRange
-    })
+    }>(`/v1/performance/trends`, params)
   },
   
   // 获取性能记录详情

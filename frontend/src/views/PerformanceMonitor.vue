@@ -371,12 +371,31 @@ const loadProjects = async () => {
 }
 
 const onProjectChange = async () => {
-  if (selectedProject.value) {
-    await Promise.all([
-      loadOverviewData(),
-      loadPerformanceData(),
-      loadChartData()
-    ])
+  console.log(`项目切换: ${selectedProject.value}`)
+  
+  if (!selectedProject.value) {
+    console.warn('未选择项目，不加载数据')
+    return
+  }
+  
+  try {
+    // 检查图表是否初始化
+    if (!responseTimeChart || !endpointChart) {
+      console.log('图表未初始化，先初始化图表')
+      initCharts()
+      // 等待图表初始化完成
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    
+    // 依次加载数据，保证图表最后渲染
+    await loadOverviewData()
+    await loadPerformanceData()
+    await loadChartData()
+    
+    console.log('项目数据切换完成')
+  } catch (error) {
+    console.error('切换项目时加载数据失败:', error)
+    ElMessage.error('加载项目数据失败，请重试')
   }
 }
 
@@ -438,15 +457,46 @@ const loadPerformanceData = async () => {
 }
 
 const loadChartData = async () => {
-  if (!selectedProject.value) return
+  if (!selectedProject.value) {
+    console.log('未选择项目，不加载图表数据')
+    return
+  }
+  
+  console.log(`加载图表数据: 项目=${selectedProject.value}, 时间范围=${timeRange.value}`)
   
   try {
+    // 检查图表实例是否初始化
+    if (!responseTimeChart || !endpointChartRef.value) {
+      console.warn('响应时间图表未初始化，重新初始化...')
+      if (responseTimeChartRef.value) {
+        responseTimeChart = echarts.init(responseTimeChartRef.value)
+        window.addEventListener('resize', () => responseTimeChart?.resize())
+        console.log('响应时间图表已重新初始化')
+      }
+    }
+    
+    if (!endpointChart || !endpointChartRef.value) {
+      console.warn('接口分布图表未初始化，重新初始化...')
+      if (endpointChartRef.value) {
+        endpointChart = echarts.init(endpointChartRef.value)
+        window.addEventListener('resize', () => endpointChart?.resize())
+        console.log('接口分布图表已重新初始化')
+      }
+    }
+    
+    // 调用API获取数据
+    console.log('发起API请求获取趋势数据...')
     const response = await performanceApi.getPerformanceTrends(
       selectedProject.value,
       timeRange.value
     )
     
+    // 检查响应数据
     const trendData = response.data
+    console.log('趋势数据返回成功:', {
+      response_times_count: trendData.response_times?.length || 0,
+      endpoint_stats_count: trendData.endpoint_stats?.length || 0
+    })
     
     // 更新响应时间趋势图
     updateResponseTimeChart(trendData.response_times)
@@ -455,107 +505,232 @@ const loadChartData = async () => {
     updateEndpointChart(trendData.endpoint_stats)
   } catch (error) {
     console.error('加载图表数据失败:', error)
+    // 发生错误时显示空图表
+    renderEmptyResponseTimeChart()
+    renderEmptyEndpointChart()
   }
 }
 
 const updateResponseTimeChart = (data: any[]) => {
-  if (!responseTimeChart) return
+  console.log(`开始更新响应时间趋势图, 数据长度: ${data?.length || 0}`)
   
-  const option = {
-    title: {
-      text: '响应时间趋势',
-      left: 'center',
-      textStyle: { fontSize: 14 }
-    },
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const time = params[0].axisValue
-        const value = params[0].value
-        return `${time}<br/>响应时间: ${value}ms`
-      }
-    },
-    xAxis: {
-      type: 'category',
-      data: data.map(item => item.time),
-      axisLabel: {
-        rotate: 45,
-        fontSize: 10
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: '响应时间(ms)',
-      nameTextStyle: { fontSize: 10 }
-    },
-    series: [{
-      type: 'line',
-      data: data.map(item => item.avg_duration * 1000),
-      smooth: true,
-      lineStyle: { color: '#409eff' },
-      areaStyle: { color: 'rgba(64, 158, 255, 0.1)' }
-    }],
-    grid: {
-      left: '10%',
-      right: '10%',
-      bottom: '15%',
-      top: '15%'
-    }
-  }
-  
-  responseTimeChart.setOption(option)
-}
-
-const updateEndpointChart = (data: any[]) => {
-  if (!endpointChart) return
-  
-  const option = {
-    title: {
-      text: '接口性能分布',
-      left: 'center',
-      textStyle: { fontSize: 14 }
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}ms ({d}%)'
-    },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['50%', '60%'],
-      data: data.map(item => ({
-        name: item.path,
-        value: item.avg_duration * 1000
-      })),
-      emphasis: {
-        itemStyle: {
-          shadowBlur: 10,
-          shadowOffsetX: 0,
-          shadowColor: 'rgba(0, 0, 0, 0.5)'
-        }
-      }
-    }]
-  }
-  
-  endpointChart.setOption(option)
-}
-
-const initCharts = () => {
-  nextTick(() => {
+  if (!responseTimeChart) {
+    console.warn('响应时间图表实例不存在，尝试重新初始化')
     if (responseTimeChartRef.value) {
       responseTimeChart = echarts.init(responseTimeChartRef.value)
       window.addEventListener('resize', () => responseTimeChart?.resize())
+    } else {
+      console.error('响应时间图表容器不存在，无法初始化')
+      return
+    }
+  }
+  
+  // 检查数据有效性
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    console.warn('响应时间趋势图数据为空，显示空图表')
+    renderEmptyResponseTimeChart()
+    return
+  }
+  
+  try {
+    // 验证数据完整性
+    const validData = data.filter(item => item && item.time && typeof item.avg_duration === 'number')
+    if (validData.length === 0) {
+      console.warn('所有响应时间趋势数据无效，显示空图表')
+      renderEmptyResponseTimeChart()
+      return
     }
     
+    console.log(`有效数据: ${validData.length}/${data.length} 条`)
+    
+    const option = {
+      title: {
+        text: '响应时间趋势',
+        left: 'center',
+        textStyle: { fontSize: 14 }
+      },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const time = params[0].axisValue
+          const value = params[0].value
+          return `${time}<br/>响应时间: ${value}ms`
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: validData.map(item => item.time),
+        axisLabel: {
+          rotate: 45,
+          fontSize: 10
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: '响应时间(ms)',
+        nameTextStyle: { fontSize: 10 }
+      },
+      series: [{
+        type: 'line',
+        data: validData.map(item => (item.avg_duration || 0) * 1000),
+        smooth: true,
+        lineStyle: { color: '#409eff' },
+        areaStyle: { color: 'rgba(64, 158, 255, 0.1)' }
+      }],
+      grid: {
+        left: '10%',
+        right: '10%',
+        bottom: '15%',
+        top: '15%'
+      }
+    }
+    
+    console.log('设置响应时间趋势图选项')
+    responseTimeChart.setOption(option, true)
+    console.log('响应时间趋势图更新完成')
+  } catch (error) {
+    console.error('更新响应时间趋势图失败:', error)
+    renderEmptyResponseTimeChart()
+  }
+}
+
+const updateEndpointChart = (data: any[]) => {
+  console.log(`开始更新接口性能分布图, 数据长度: ${data?.length || 0}`)
+  
+  if (!endpointChart) {
+    console.warn('接口性能分布图实例不存在，尝试重新初始化')
     if (endpointChartRef.value) {
       endpointChart = echarts.init(endpointChartRef.value)
       window.addEventListener('resize', () => endpointChart?.resize())
+    } else {
+      console.error('接口性能分布图容器不存在，无法初始化')
+      return
+    }
+  }
+  
+  // 检查数据有效性
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    console.warn('接口性能分布图数据为空，显示空图表')
+    renderEmptyEndpointChart()
+    return
+  }
+  
+  try {
+    // 验证数据完整性
+    const validData = data.filter(item => item && item.path && typeof item.avg_duration === 'number')
+    if (validData.length === 0) {
+      console.warn('所有接口性能分布数据无效，显示空图表')
+      renderEmptyEndpointChart()
+      return
+    }
+    
+    console.log(`有效数据: ${validData.length}/${data.length} 条`)
+    
+    const option = {
+      title: {
+        text: '接口性能分布',
+        left: 'center',
+        textStyle: { fontSize: 14 }
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}ms ({d}%)'
+      },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '60%'],
+        data: validData.map(item => ({
+          name: item.path || 'unknown',
+          value: (item.avg_duration || 0) * 1000
+        })),
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        }
+      }]
+    }
+    
+    console.log('设置接口性能分布图选项')
+    endpointChart.setOption(option, true)
+    console.log('接口性能分布图更新完成')
+  } catch (error) {
+    console.error('更新接口性能分布图失败:', error)
+    renderEmptyEndpointChart()
+  }
+}
+
+const initCharts = () => {
+  // 使用nextTick确保图表容器已经渲染
+  nextTick(() => {
+    // 打印日志，帮助调试
+    console.log('开始初始化图表...')
+    console.log('响应时间图表容器状态:', responseTimeChartRef.value ? '已存在' : '不存在')
+    console.log('接口分布图表容器状态:', endpointChartRef.value ? '已存在' : '不存在')
+    
+    if (responseTimeChartRef.value) {
+      // 销毁存在的实例如果存在
+      if (responseTimeChart) {
+        responseTimeChart.dispose()
+      }
+      responseTimeChart = echarts.init(responseTimeChartRef.value)
+      window.addEventListener('resize', () => responseTimeChart?.resize())
+      // 初始化时显示空图表
+      renderEmptyResponseTimeChart()
+      console.log('响应时间图表初始化完成')
+    }
+    
+    if (endpointChartRef.value) {
+      // 销毁存在的实例如果存在
+      if (endpointChart) {
+        endpointChart.dispose()
+      }
+      endpointChart = echarts.init(endpointChartRef.value)
+      window.addEventListener('resize', () => endpointChart?.resize())
+      // 初始化时显示空图表
+      renderEmptyEndpointChart()
+      console.log('接口分布图表初始化完成')
     }
   })
 }
 
-const refreshData = () => {
-  onProjectChange()
+const refreshData = async () => {
+  console.log('开始刷新数据...')
+  try {
+    // 检查是否选择了项目
+    if (!selectedProject.value && projects.value.length > 0) {
+      console.log('未选择项目，自动选择第一个项目')
+      selectedProject.value = projects.value[0].project_key
+    }
+    
+    if (!selectedProject.value) {
+      console.warn('无可用项目，无法加载数据')
+      return
+    }
+    
+    // 确保图表实例已初始化
+    if (!responseTimeChart || !endpointChart) {
+      console.log('图表未初始化，重新初始化...')
+      initCharts()
+      // 等待图表初始化完成
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    
+    // 并行加载数据
+    await Promise.all([
+      loadOverviewData(),
+      loadPerformanceData(),
+      loadChartData()
+    ])
+    
+    console.log('数据刷新完成')
+  } catch (error) {
+    console.error('刷新数据失败:', error)
+    ElMessage.error('刷新数据失败，请重试')
+  }
 }
 
 const viewDetails = async (record: any) => {
@@ -665,10 +840,115 @@ const getDurationClass = (duration: number) => {
   return 'duration-very-slow'
 }
 
+// 添加空图表渲染方法
+const renderEmptyResponseTimeChart = () => {
+  console.log('渲染空的响应时间趋势图')
+  
+  if (!responseTimeChart) {
+    console.warn('响应时间图表实例不存在，尝试初始化')
+    if (responseTimeChartRef.value) {
+      try {
+        responseTimeChart = echarts.init(responseTimeChartRef.value)
+        window.addEventListener('resize', () => responseTimeChart?.resize())
+      } catch (error) {
+        console.error('初始化响应时间图表失败:', error)
+        return
+      }
+    } else {
+      console.error('响应时间图表容器不存在')
+      return
+    }
+  }
+  
+  try {
+    const option = {
+      title: {
+        text: '暂无响应时间趋势数据',
+        left: 'center',
+        top: 'center',
+        textStyle: {
+          color: '#909399',
+          fontSize: 14,
+          fontWeight: 'normal'
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: []
+      },
+      yAxis: {
+        type: 'value',
+        name: '响应时间(ms)'
+      },
+      series: []
+    }
+    
+    responseTimeChart.setOption(option, true)
+    console.log('空响应时间趋势图渲染完成')
+  } catch (error) {
+    console.error('渲染空响应时间趋势图失败:', error)
+  }
+}
+
+const renderEmptyEndpointChart = () => {
+  console.log('渲染空的接口性能分布图')
+  
+  if (!endpointChart) {
+    console.warn('接口性能分布图实例不存在，尝试初始化')
+    if (endpointChartRef.value) {
+      try {
+        endpointChart = echarts.init(endpointChartRef.value)
+        window.addEventListener('resize', () => endpointChart?.resize())
+      } catch (error) {
+        console.error('初始化接口性能分布图失败:', error)
+        return
+      }
+    } else {
+      console.error('接口性能分布图容器不存在')
+      return
+    }
+  }
+  
+  try {
+    const option = {
+      title: {
+        text: '暂无接口性能分布数据',
+        left: 'center',
+        top: 'center',
+        textStyle: {
+          color: '#909399',
+          fontSize: 14,
+          fontWeight: 'normal'
+        }
+      },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '60%'],
+        data: []
+      }]
+    }
+    
+    endpointChart.setOption(option, true)
+    console.log('空接口性能分布图渲染完成')
+  } catch (error) {
+    console.error('渲染空接口性能分布图失败:', error)
+  }
+}
+
 // 生命周期
 onMounted(async () => {
-  await loadProjects()
+  // 先初始化图表
   initCharts()
+
+  // 添加小延迟，确保图表DOM完全渲染
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // 然后加载数据
+  await loadProjects()
+  
+  // 直接触发刷新操作确保数据加载
+  refreshData()
 })
 </script>
 
