@@ -6,6 +6,7 @@ export const projectApi = {
   getProjects(params?: {
     page?: number
     size?: number
+    name?: string
     status?: string
     framework?: string
   }) {

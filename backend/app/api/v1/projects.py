@@ -19,6 +19,7 @@ router = APIRouter()
 async def list_projects(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页记录数"),
+    name: Optional[str] = Query(None, description="项目名称模糊搜索"),
     status: Optional[str] = Query(None, description="状态过滤"),
     framework: Optional[str] = Query(None, description="框架过滤"),
     db = Depends(get_database)
@@ -28,6 +29,8 @@ async def list_projects(
     
     # 构建查询条件
     query = {}
+    if name:
+        query["name"] = {"$regex": name, "$options": "i"}  # 模糊搜索，不区分大小写
     if status:
         query["status"] = status
     if framework:
