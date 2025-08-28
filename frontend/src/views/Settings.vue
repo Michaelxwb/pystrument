@@ -15,8 +15,8 @@
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="14">
+    <el-row :gutter="24">
+      <el-col :span="12">
         <!-- 基本设置 -->
         <div class="settings-section">
           <h3 class="section-title">基本设置 <el-tooltip content="平台基础配置信息" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
@@ -103,7 +103,74 @@
             </el-form>
           </el-card>
         </div>
+        
+        <!-- 系统状态 -->
+        <div class="status-section">
+          <h3 class="section-title">系统状态 <el-tooltip content="当前系统运行状态" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+          <el-card v-loading="statusLoading" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><DataLine /></el-icon>
+                  <span>运行状态</span>
+                  <el-tooltip content="每30秒自动刷新" placement="top">
+                    <el-tag size="small" type="info" style="margin-left: 5px;">实时</el-tag>
+                  </el-tooltip>
+                </div>
+                <div class="card-actions">
+                  <el-button type="text" @click="refreshStatus">
+                    <el-icon><Refresh /></el-icon>
+                    刷新
+                  </el-button>
+                </div>
+              </div>
+            </template>
+            <div class="system-status">
+              <div class="status-item">
+                <div class="status-label">
+                  <el-icon><DataAnalysis /></el-icon>
+                  <span>数据库:</span>
+                </div>
+                <el-tag :type="getStatusType(systemStatus.database?.status)">
+                  {{ getStatusText(systemStatus.database?.status) }}
+                </el-tag>
+              </div>
+              <div class="status-item">
+                <div class="status-label">
+                  <el-icon><Cpu /></el-icon>
+                  <span>Redis:</span>
+                </div>
+                <el-tag :type="getStatusType(systemStatus.redis?.status)">
+                  {{ getStatusText(systemStatus.redis?.status) }}
+                </el-tag>
+              </div>
+              <div class="status-item">
+                <div class="status-label">
+                  <el-icon><MagicStick /></el-icon>
+                  <span>AI服务:</span>
+                </div>
+                <el-tag :type="getStatusType(systemStatus.aiService?.status)">
+                  {{ getStatusText(systemStatus.aiService?.status) }}
+                </el-tag>
+              </div>
+              <div class="status-item">
+                <div class="status-label">
+                  <el-icon><Histogram /></el-icon>
+                  <span>存储空间:</span>
+                </div>
+                <el-progress 
+                  :percentage="getStoragePercentage(systemStatus.storage)" 
+                  :status="getStorageStatus(systemStatus.storage)"
+                  :stroke-width="10"
+                  style="width: 120px;"
+                ></el-progress>
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </el-col>
 
+      <el-col :span="12">
         <!-- AI分析设置 -->
         <div class="settings-section">
           <h3 class="section-title">AI分析设置 <el-tooltip content="AI分析服务相关配置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
@@ -184,83 +251,7 @@
             </el-form>
           </el-card>
         </div>
-
-        <!-- 保存按钮 -->
-        <div style="margin-top: 20px; text-align: center;">
-          <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
-            <el-icon><Check /></el-icon>
-            保存设置
-          </el-button>
-          <el-button size="large" @click="resetSettings">
-            <el-icon><Refresh /></el-icon>
-            重置
-          </el-button>
-        </div>
-      </el-col>
-
-      <el-col :span="10">
-        <!-- 系统状态 -->
-        <div class="status-section">
-          <h3 class="section-title">系统状态 <el-tooltip content="当前系统运行状态" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
-          <el-card v-loading="statusLoading" shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <div class="card-title">
-                  <el-icon><DataLine /></el-icon>
-                  <span>运行状态</span>
-                </div>
-                <div class="card-actions">
-                  <el-button type="text" @click="refreshStatus">
-                    <el-icon><Refresh /></el-icon>
-                    刷新
-                  </el-button>
-                </div>
-              </div>
-            </template>
-            <div class="system-status">
-              <div class="status-item">
-                <div class="status-label">
-                  <el-icon><DataAnalysis /></el-icon>
-                  <span>数据库:</span>
-                </div>
-                <el-tag :type="getStatusType(systemStatus.database?.status)">
-                  {{ getStatusText(systemStatus.database?.status) }}
-                </el-tag>
-              </div>
-              <div class="status-item">
-                <div class="status-label">
-                  <el-icon><Cpu /></el-icon>
-                  <span>Redis:</span>
-                </div>
-                <el-tag :type="getStatusType(systemStatus.redis?.status)">
-                  {{ getStatusText(systemStatus.redis?.status) }}
-                </el-tag>
-              </div>
-              <div class="status-item">
-                <div class="status-label">
-                  <el-icon><MagicStick /></el-icon>
-                  <span>AI服务:</span>
-                </div>
-                <el-tag :type="getStatusType(systemStatus.aiService?.status)">
-                  {{ getStatusText(systemStatus.aiService?.status) }}
-                </el-tag>
-              </div>
-              <div class="status-item">
-                <div class="status-label">
-                  <el-icon><Histogram /></el-icon>
-                  <span>存储空间:</span>
-                </div>
-                <el-progress 
-                  :percentage="getStoragePercentage(systemStatus.storage)" 
-                  :status="getStorageStatus(systemStatus.storage)"
-                  :stroke-width="10"
-                  style="width: 120px;"
-                ></el-progress>
-              </div>
-            </div>
-          </el-card>
-        </div>
-
+        
         <!-- 操作日志 -->
         <div class="logs-section">
           <h3 class="section-title">操作日志 <el-tooltip content="最近的系统操作记录" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
@@ -270,6 +261,9 @@
                 <div class="card-title">
                   <el-icon><Document /></el-icon>
                   <span>最近操作</span>
+                  <el-tooltip content="每30秒自动刷新" placement="top">
+                    <el-tag size="small" type="info" style="margin-left: 5px;">实时</el-tag>
+                  </el-tooltip>
                 </div>
                 <div class="card-actions">
                   <el-button type="text" @click="refreshLogs">
@@ -294,7 +288,12 @@
             </div>
           </el-card>
         </div>
-
+      </el-col>
+    </el-row>
+    
+    <!-- 快捷操作和保存按钮 -->
+    <el-row :gutter="24" style="margin-top: 24px;">
+      <el-col :span="12">
         <!-- 快捷操作 -->
         <div class="actions-section">
           <h3 class="section-title">快捷操作 <el-tooltip content="常用系统维护操作" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
@@ -351,8 +350,28 @@
           </el-card>
         </div>
       </el-col>
+      
+      <el-col :span="12">
+        <!-- 保存按钮 -->
+        <div class="save-section">
+          <h3 class="section-title">设置操作 <el-tooltip content="保存或重置当前设置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+          <el-card shadow="hover">
+            <div style="text-align: center; padding: 20px;">
+              <p style="margin-bottom: 20px; color: #606266;">请确保在保存设置前检查所有配置项是否正确</p>
+              <el-button type="primary" size="large" @click="saveSettings" :loading="saving" style="margin-right: 20px; min-width: 120px;">
+                <el-icon><Check /></el-icon>
+                保存设置
+              </el-button>
+              <el-button size="large" @click="resetSettings" style="min-width: 120px;">
+                <el-icon><Refresh /></el-icon>
+                重置
+              </el-button>
+            </div>
+          </el-card>
+        </div>
+      </el-col>
     </el-row>
-
+    
     <!-- 导入配置对话框 -->
     <el-dialog v-model="importDialogVisible" title="导入配置" width="500px">
       <el-upload
@@ -387,7 +406,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Check, 
@@ -475,6 +494,11 @@ const importing = ref(false)
 const importDialogVisible = ref(false)
 const importFile = ref<File | null>(null)
 
+// 定时器
+const statusTimer = ref<number | null>(null)
+const logsTimer = ref<number | null>(null)
+const autoRefreshInterval = 30000 // 30秒自动刷新
+
 // 初始化
 onMounted(async () => {
   await Promise.all([
@@ -482,7 +506,47 @@ onMounted(async () => {
     loadSystemStatus(),
     loadOperationLogs()
   ])
+  
+  // 启动自动刷新
+  startAutoRefresh()
 })
+
+// 在组件卸载时清除定时器
+onUnmounted(() => {
+  clearAutoRefresh()
+})
+
+// 启动自动刷新
+const startAutoRefresh = () => {
+  // 清除现有定时器
+  clearAutoRefresh()
+  
+  // 设置新的定时器
+  statusTimer.value = window.setInterval(() => {
+    if (!statusLoading.value) {
+      loadSystemStatus()
+    }
+  }, autoRefreshInterval)
+  
+  logsTimer.value = window.setInterval(() => {
+    if (!logsLoading.value) {
+      loadOperationLogs()
+    }
+  }, autoRefreshInterval)
+}
+
+// 清除自动刷新定时器
+const clearAutoRefresh = () => {
+  if (statusTimer.value) {
+    clearInterval(statusTimer.value)
+    statusTimer.value = null
+  }
+  
+  if (logsTimer.value) {
+    clearInterval(logsTimer.value)
+    logsTimer.value = null
+  }
+}
 
 // 加载设置
 const loadSettings = async () => {
@@ -919,7 +983,7 @@ const getActionText = (action?: string) => {
 
 <style scoped>
 .settings {
-  padding: 20px;
+  padding: 24px;
 }
 
 .page-header {
@@ -950,8 +1014,20 @@ const getActionText = (action?: string) => {
   gap: 10px;
 }
 
-.settings-section, .status-section, .logs-section, .actions-section {
+.settings-section, .status-section, .logs-section, .actions-section, .save-section {
   margin-bottom: 24px;
+}
+
+.el-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.el-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-title {
@@ -1003,7 +1079,9 @@ const getActionText = (action?: string) => {
 
 .operation-logs {
   max-height: 300px;
+  height: 220px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .log-item {
