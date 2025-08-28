@@ -306,6 +306,7 @@ import { ref, computed, nextTick, defineProps, defineEmits } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowUp, Warning } from '@element-plus/icons-vue'
 import type { PerformanceRecord, FunctionCall } from '@/types/performance'
+import { formatDateTime } from '@/utils/dateUtils'
 
 // Props
 const props = defineProps<{
@@ -433,9 +434,7 @@ const treeProps = {
 }
 
 // 方法
-const formatDateTime = (dateString: string) => {
-  return new Date(dateString).toLocaleString('zh-CN')
-}
+// 移除本地的formatDateTime函数，使用从dateUtils导入的函数
 
 const formatBytes = (bytes: number) => {
   if (!bytes || bytes === 0) return '0 B'

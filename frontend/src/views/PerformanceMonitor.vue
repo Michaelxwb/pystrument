@@ -1,11 +1,12 @@
 <template>
   <div class="performance-monitor">
     <div class="page-header">
-      <div class="header-actions">
+      <div class="header-left">
+        <span class="title">性能监控仪表盘</span>
         <el-select
           v-model="selectedProject"
           placeholder="选择项目"
-          style="width: 200px; margin-right: 12px;"
+          style="width: 200px; margin-left: 16px;"
           @change="onProjectChange"
         >
           <el-option
@@ -15,220 +16,277 @@
             :value="project.project_key"
           />
         </el-select>
-        <el-button type="primary" @click="refreshData">
-          <el-icon><Refresh /></el-icon>
-          刷新
-        </el-button>
+      </div>
+      <div class="header-actions">
+        <el-tooltip content="刷新数据" placement="top">
+          <el-button type="primary" @click="refreshData">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="导出数据" placement="top">
+          <el-button @click="exportData">
+            <el-icon><Download /></el-icon>
+            导出
+          </el-button>
+        </el-tooltip>
       </div>
     </div>
 
     <div v-if="selectedProject" class="monitor-content">
       <!-- 性能概览卡片 -->
-      <div class="overview-cards">
-        <el-row :gutter="20">
-          <el-col :span="6">
-            <el-card class="metric-card">
-              <div class="metric-item">
-                <div class="metric-value">{{ overview.total_requests }}</div>
-                <div class="metric-label">今日请求数</div>
-                <div class="metric-trend">
-                  <span :class="overview.requests_trend > 0 ? 'trend-up' : 'trend-down'">
-                    {{ overview.requests_trend > 0 ? '↗' : '↘' }}
-                    {{ Math.abs(overview.requests_trend) }}%
-                  </span>
+      <div class="overview-section">
+        <h3 class="section-title">性能概览 <el-tooltip content="显示当前项目的核心性能指标" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+        <div class="overview-cards">
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="hover">
+                <div class="metric-item">
+                  <div class="metric-icon request-icon"><el-icon><DataLine /></el-icon></div>
+                  <div class="metric-value">{{ overview.total_requests }}</div>
+                  <div class="metric-label">今日请求数</div>
+                  <div class="metric-trend">
+                    <span :class="[overview.requests_trend > 0 ? 'trend-up' : 'trend-down', 'trend-value']">
+                      {{ overview.requests_trend > 0 ? '↑' : '↓' }}
+                      {{ Math.abs(overview.requests_trend) }}%
+                    </span>
+                    <span class="trend-label">与昨日同比</span>
+                  </div>
                 </div>
-              </div>
-            </el-card>
-          </el-col>
-          
-          <el-col :span="6">
-            <el-card class="metric-card">
-              <div class="metric-item">
-                <div class="metric-value">{{ overview.avg_response_time }}ms</div>
-                <div class="metric-label">平均响应时间</div>
-                <div class="metric-trend">
-                  <span :class="overview.response_time_trend < 0 ? 'trend-up' : 'trend-down'">
-                    {{ overview.response_time_trend < 0 ? '↗' : '↘' }}
-                    {{ Math.abs(overview.response_time_trend) }}%
-                  </span>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="hover">
+                <div class="metric-item">
+                  <div class="metric-icon time-icon"><el-icon><Timer /></el-icon></div>
+                  <div class="metric-value">{{ overview.avg_response_time }}ms</div>
+                  <div class="metric-label">平均响应时间</div>
+                  <div class="metric-trend">
+                    <span :class="[overview.response_time_trend < 0 ? 'trend-up' : 'trend-down', 'trend-value']">
+                      {{ overview.response_time_trend < 0 ? '↑' : '↓' }}
+                      {{ Math.abs(overview.response_time_trend) }}%
+                    </span>
+                    <span class="trend-label">与昨日同比</span>
+                  </div>
                 </div>
-              </div>
-            </el-card>
-          </el-col>
-          
-          <el-col :span="6">
-            <el-card class="metric-card">
-              <div class="metric-item">
-                <div class="metric-value">{{ overview.error_rate }}%</div>
-                <div class="metric-label">错误率</div>
-                <div class="metric-trend">
-                  <span :class="overview.error_rate_trend < 0 ? 'trend-up' : 'trend-down'">
-                    {{ overview.error_rate_trend < 0 ? '↗' : '↘' }}
-                    {{ Math.abs(overview.error_rate_trend) }}%
-                  </span>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="hover">
+                <div class="metric-item">
+                  <div class="metric-icon error-icon"><el-icon><WarningFilled /></el-icon></div>
+                  <div class="metric-value">{{ overview.error_rate }}%</div>
+                  <div class="metric-label">错误率</div>
+                  <div class="metric-trend">
+                    <span :class="[overview.error_rate_trend < 0 ? 'trend-up' : 'trend-down', 'trend-value']">
+                      {{ overview.error_rate_trend < 0 ? '↑' : '↓' }}
+                      {{ Math.abs(overview.error_rate_trend) }}%
+                    </span>
+                    <span class="trend-label">与昨日同比</span>
+                  </div>
                 </div>
-              </div>
-            </el-card>
-          </el-col>
-          
-          <el-col :span="6">
-            <el-card class="metric-card">
-              <div class="metric-item">
-                <div class="metric-value">{{ overview.performance_score }}</div>
-                <div class="metric-label">性能评分</div>
-                <div class="metric-trend">
-                  <span :class="overview.score_trend > 0 ? 'trend-up' : 'trend-down'">
-                    {{ overview.score_trend > 0 ? '↗' : '↘' }}
-                    {{ Math.abs(overview.score_trend) }}
-                  </span>
+              </el-card>
+            </el-col>
+            
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="hover">
+                <div class="metric-item">
+                  <div class="metric-icon score-icon"><el-icon><Star /></el-icon></div>
+                  <div class="metric-value">{{ overview.performance_score }}</div>
+                  <div class="metric-label">性能评分</div>
+                  <div class="metric-trend">
+                    <span :class="[overview.score_trend > 0 ? 'trend-up' : 'trend-down', 'trend-value']">
+                      {{ overview.score_trend > 0 ? '↑' : '↓' }}
+                      {{ Math.abs(overview.score_trend) }}
+                    </span>
+                    <span class="trend-label">与昨日同比</span>
+                  </div>
                 </div>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
+              </el-card>
+            </el-col>
+          </el-row>
+        </div>
       </div>
 
       <!-- 图表区域 -->
       <div class="charts-section">
+        <h3 class="section-title">性能图表 <el-tooltip content="监控数据可视化展示" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-card>
+            <el-card shadow="hover" class="chart-card">
               <template #header>
                 <div class="chart-header">
-                  <span>响应时间趋势</span>
-                  <el-select
-                    v-model="timeRange"
-                    size="small"
-                    style="width: 120px"
-                    @change="loadChartData"
-                  >
-                    <el-option label="1小时" value="1h" />
-                    <el-option label="6小时" value="6h" />
-                    <el-option label="24小时" value="24h" />
-                    <el-option label="7天" value="7d" />
-                  </el-select>
+                  <div class="chart-title">
+                    <el-icon><Odometer /></el-icon>
+                    <span>响应时间趋势</span>
+                  </div>
+                  <div class="chart-actions">
+                    <el-radio-group v-model="timeRange" size="small" @change="loadChartData">
+                      <el-radio-button label="1h">1小时</el-radio-button>
+                      <el-radio-button label="6h">6小时</el-radio-button>
+                      <el-radio-button label="24h">24小时</el-radio-button>
+                      <el-radio-button label="7d">7天</el-radio-button>
+                    </el-radio-group>
+                  </div>
                 </div>
               </template>
-              <div ref="responseTimeChartRef" style="height: 300px;"></div>
+              <div class="chart-container">
+                <div v-if="chartLoading" class="chart-loading">
+                  <el-skeleton :rows="5" animated />
+                </div>
+                <div ref="responseTimeChartRef" style="height: 300px;"></div>
+              </div>
             </el-card>
           </el-col>
           
           <el-col :span="12">
-            <el-card>
+            <el-card shadow="hover" class="chart-card">
               <template #header>
-                <span>接口性能分布</span>
+                <div class="chart-header">
+                  <div class="chart-title">
+                    <el-icon><PieChart /></el-icon>
+                    <span>接口性能分布</span>
+                  </div>
+                  <div class="chart-actions">
+                    <el-tooltip content="点击图表可查看详情" placement="top">
+                      <el-icon><InfoFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </div>
               </template>
-              <div ref="endpointChartRef" style="height: 300px;"></div>
+              <div class="chart-container">
+                <div v-if="chartLoading" class="chart-loading">
+                  <el-skeleton :rows="5" animated />
+                </div>
+                <div ref="endpointChartRef" style="height: 300px;"></div>
+              </div>
             </el-card>
           </el-col>
         </el-row>
       </div>
 
       <!-- 最新性能数据表格 -->
-      <div class="performance-table">
-        <el-card>
-          <template #header>
-            <div class="table-header">
-              <span>最新性能数据</span>
-              <div class="header-filters">
-                <el-input
-                  v-model="tableFilters.path"
-                  placeholder="筛选接口路径"
-                  size="small"
-                  style="width: 200px; margin-right: 12px;"
-                  @keyup.enter="loadPerformanceData"
-                />
-                <el-select
-                  v-model="tableFilters.status_code"
-                  placeholder="状态码"
-                  size="small"
-                  style="width: 120px; margin-right: 12px;"
-                  clearable
-                >
-                  <el-option label="200" value="200" />
-                  <el-option label="400" value="400" />
-                  <el-option label="500" value="500" />
-                </el-select>
-                <el-button size="small" @click="loadPerformanceData">搜索</el-button>
-              </div>
+      <div class="performance-table-section">
+        <h3 class="section-title">最新性能数据 <el-tooltip content="展示最新的API请求性能记录" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+        <el-card shadow="hover">
+          <div class="table-toolbar">
+            <div class="filter-group">
+              <el-input
+                v-model="tableFilters.path"
+                placeholder="输入接口路径搜索"
+                prefix-icon="Search"
+                clearable
+                @keyup.enter="loadPerformanceData"
+                style="width: 250px; margin-right: 10px;"
+              />
+              <el-select
+                v-model="tableFilters.status_code"
+                placeholder="状态码"
+                style="width: auto; min-width: 120px; margin-right: 10px;"
+                clearable
+              >
+                <el-option label="成功 (200)" value="200" />
+                <el-option label="客户端错误 (400+)" value="400" />
+                <el-option label="服务器错误 (500+)" value="500" />
+              </el-select>
+              <el-button type="primary" @click="loadPerformanceData">
+                <el-icon><Search /></el-icon>
+                搜索
+              </el-button>
+              <el-button @click="resetTableFilters">
+                <el-icon><RefreshRight /></el-icon>
+                重置
+              </el-button>
             </div>
-          </template>
+          </div>
           
           <el-table
             v-loading="tableLoading"
             :data="performanceData"
             stripe
+            border
+            highlight-current-row
+            style="width: 100%"
+            :empty-text="'暂无数据'"
+            :header-cell-style="{backgroundColor: '#f5f7fa', color: '#606266'}"
           >
-            <el-table-column prop="timestamp" label="时间" width="180">
+            <el-table-column prop="timestamp" label="时间" width="180" sortable>
               <template #default="{ row }">
-                {{ formatDateTime(row.timestamp) }}
+                <el-tooltip :content="formatFullDateTime(row.timestamp)" placement="top">
+                  <span>{{ formatDateTime(row.timestamp) }}</span>
+                </el-tooltip>
               </template>
             </el-table-column>
             
-            <el-table-column prop="request_info.path" label="接口路径" min-width="200">
+            <el-table-column prop="request_info.path" label="接口路径" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                <el-tag :type="getMethodTagType(row.request_method || 'GET')" size="small">
+                <el-tag :type="getMethodTagType(row.request_method || 'GET')" size="small" effect="plain">
                   {{ row.request_method || 'GET' }}
                 </el-tag>
                 <span style="margin-left: 8px;">{{ row.request_path || '/' }}</span>
               </template>
             </el-table-column>
             
-            <el-table-column prop="response_info.status_code" label="状态码" width="100">
+            <el-table-column prop="response_info.status_code" label="状态码" width="100" sortable>
               <template #default="{ row }">
-                <el-tag :type="getStatusTagType(row.status_code || 200)" size="small">
+                <el-tag :type="getStatusTagType(row.status_code || 200)" size="small" effect="dark">
                   {{ row.status_code || 200 }}
                 </el-tag>
               </template>
             </el-table-column>
             
-            <el-table-column prop="performance_metrics.total_duration" label="响应时间" width="120">
+            <el-table-column prop="performance_metrics.total_duration" label="响应时间" width="120" sortable>
               <template #default="{ row }">
-                <span :class="getDurationClass(row.duration || 0)">
-                  {{ ((row.duration || 0) * 1000).toFixed(2) }}ms
-                </span>
+                <el-tooltip :content="getDurationTooltip(row.duration || 0)" placement="top">
+                  <span :class="getDurationClass(row.duration || 0)">
+                    {{ ((row.duration || 0) * 1000).toFixed(2) }}ms
+                  </span>
+                </el-tooltip>
               </template>
             </el-table-column>
             
-            <el-table-column prop="performance_metrics.memory_usage.peak_memory" label="内存使用" width="120">
+            <el-table-column prop="performance_metrics.memory_usage.peak_memory" label="内存使用" width="120" sortable>
               <template #default="{ row }">
-                {{ (row.memory_peak || 0).toFixed(1) }}MB
+                <el-tooltip :content="`内存占用峰值: ${(row.memory_peak || 0).toFixed(2)}MB`" placement="top">
+                  <span>{{ (row.memory_peak || 0).toFixed(1) }}MB</span>
+                </el-tooltip>
               </template>
             </el-table-column>
             
-            <el-table-column label="操作" width="200" fixed="right">
+            <el-table-column label="操作" width="240" fixed="right">
               <template #default="{ row }">
-                <el-button
-                  type="primary"
-                  size="small"
-                  @click="viewDetails(row)"
-                >
-                  详情
-                </el-button>
-                <el-button
-                  type="warning"
-                  size="small"
-                  @click="viewCallTrace(row)"
-                >
-                  调用链
-                </el-button>
-                <el-button
-                  v-if="!row.ai_analysis"
-                  type="success"
-                  size="small"
-                  @click="triggerAIAnalysis(row)"
-                  :loading="row.analyzing"
-                >
-                  AI分析
-                </el-button>
-                <el-button
-                  v-else
-                  type="info"
-                  size="small"
-                  @click="viewAIAnalysis(row)"
-                >
-                  查看分析
-                </el-button>
+                <div class="table-actions">
+                  <el-tooltip content="查看详细性能信息" placement="top">
+                    <el-button
+                      type="primary"
+                      size="small"
+                      @click="viewDetails(row)"
+                      icon="View"
+                      circle
+                    />
+                  </el-tooltip>
+                  <el-tooltip content="查看函数调用链" placement="top">
+                    <el-button
+                      type="warning"
+                      size="small"
+                      @click="viewCallTrace(row)"
+                      icon="Connection"
+                      circle
+                    />
+                  </el-tooltip>
+                  <el-tooltip :content="row.ai_analysis ? '查看分析结果' : 'AI分析该记录'" placement="top">
+                    <el-button
+                      :type="row.ai_analysis ? 'info' : 'success'"
+                      size="small"
+                      :icon="row.ai_analysis ? 'Document' : 'Magic-stick'"
+                      :loading="row.analyzing"
+                      @click="row.ai_analysis ? viewAIAnalysis(row) : triggerAIAnalysis(row)"
+                      circle
+                    />
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -242,6 +300,8 @@
               layout="total, sizes, prev, pager, next, jumper"
               @size-change="loadPerformanceData"
               @current-change="loadPerformanceData"
+              background
+              small
             />
           </div>
         </el-card>
@@ -293,13 +353,31 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage, ElNotification } from 'element-plus'
+import { 
+  Refresh, 
+  Download, 
+  QuestionFilled, 
+  DataLine, 
+  Timer, 
+  WarningFilled, 
+  Star, 
+  Odometer, 
+  PieChart, 
+  InfoFilled,
+  RefreshRight,
+  Search,
+  View,
+  Connection,
+  Document,
+  MagicStick
+} from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { projectApi } from '@/api/project'
 import { performanceApi } from '@/api/performance'
 import { analysisApi } from '@/api/analysis'
+import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
 import type { Project } from '@/types/project'
 import type { PerformanceRecord } from '@/types/performance'
 import PerformanceDetails from '@/components/PerformanceDetails.vue'
@@ -349,10 +427,13 @@ const tableFilters = reactive({
   status_code: ''
 })
 
+// 图表加载状态
+const chartLoading = ref(false)
+
 // 表格分页
 const tablePagination = reactive({
   page: 1,
-  size: 20,
+  size: 10,
   total: 0
 })
 
@@ -457,6 +538,35 @@ const loadPerformanceData = async () => {
   }
 }
 
+const resetTableFilters = () => {
+  tableFilters.path = ''
+  tableFilters.status_code = ''
+  loadPerformanceData()
+}
+
+const exportData = () => {
+  if (!selectedProject.value) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  
+  ElNotification({
+    title: '导出功能',
+    message: '数据导出功能正在开发中',
+    type: 'info'
+  })
+}
+
+
+
+const getDurationTooltip = (duration: number) => {
+  const ms = duration * 1000
+  if (ms < 100) return `非常快速: ${ms.toFixed(2)}ms`
+  if (ms < 500) return `正常响应: ${ms.toFixed(2)}ms`
+  if (ms < 1000) return `偏慢: ${ms.toFixed(2)}ms`
+  return `非常慢: ${ms.toFixed(2)}ms`
+}
+
 const loadChartData = async () => {
   if (!selectedProject.value) {
     console.log('未选择项目，不加载图表数据')
@@ -464,6 +574,7 @@ const loadChartData = async () => {
   }
   
   console.log(`加载图表数据: 项目=${selectedProject.value}, 时间范围=${timeRange.value}`)
+  chartLoading.value = true
   
   try {
     // 检查图表实例是否初始化
@@ -509,6 +620,8 @@ const loadChartData = async () => {
     // 发生错误时显示空图表
     renderEmptyResponseTimeChart()
     renderEmptyEndpointChart()
+  } finally {
+    chartLoading.value = false
   }
 }
 
@@ -831,9 +944,6 @@ const viewAIAnalysis = (record: any) => {
 }
 
 // 辅助方法
-const formatDateTime = (timestamp: string) => {
-  return new Date(timestamp).toLocaleString('zh-CN')
-}
 
 const getMethodTagType = (method: string) => {
   const typeMap: Record<string, string> = {
@@ -981,12 +1091,48 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  background-color: #f8f8f8;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-left .title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title .el-icon {
+  font-size: 14px;
+  color: #909399;
+  cursor: help;
+}
+
+.overview-section {
+  margin-bottom: 24px;
 }
 
 .overview-cards {
@@ -995,49 +1141,154 @@ onMounted(async () => {
 
 .metric-card {
   text-align: center;
+  transition: all 0.3s;
+}
+
+.metric-card:hover {
+  transform: translateY(-5px);
 }
 
 .metric-card .el-card__body {
   padding: 20px;
 }
 
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.metric-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.request-icon {
+  background-color: #409eff;
+}
+
+.time-icon {
+  background-color: #67c23a;
+}
+
+.error-icon {
+  background-color: #f56c6c;
+}
+
+.score-icon {
+  background-color: #e6a23c;
+}
+
 .metric-value {
   font-size: 28px;
   font-weight: bold;
   margin-bottom: 10px;
+  color: #303133;
 }
 
 .metric-label {
   color: #909399;
   font-size: 14px;
+  margin-bottom: 10px;
 }
 
 .metric-trend {
-  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.trend-value {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.trend-label {
   font-size: 12px;
+  color: #909399;
 }
 
-.metric-trend.up {
-  color: #f56c6c;
-}
-
-.metric-trend.down {
+.trend-up {
   color: #67c23a;
 }
 
-.chart-container {
-  margin-bottom: 20px;
+.trend-down {
+  color: #f56c6c;
 }
 
-.table-filter {
-  margin-bottom: 20px;
+.charts-section {
+  margin-bottom: 24px;
 }
 
-.table-filter-row {
+.chart-card {
+  margin-bottom: 20px;
+  transition: all 0.3s;
+}
+
+.chart-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.chart-header {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.chart-container {
+  position: relative;
+}
+
+.chart-loading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.performance-table-section {
+  margin-bottom: 20px;
+}
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .table-pagination {
@@ -1048,14 +1299,17 @@ onMounted(async () => {
 
 .duration-fast {
   color: #67c23a;
+  font-weight: 500;
 }
 
 .duration-normal {
   color: #409eff;
+  font-weight: 500;
 }
 
 .duration-slow {
   color: #e6a23c;
+  font-weight: 500;
 }
 
 .duration-very-slow {
@@ -1073,5 +1327,13 @@ onMounted(async () => {
   justify-content: center;
   align-items: center;
   height: 300px;
+  flex-direction: column;
+  gap: 20px;
+  color: #909399;
+}
+
+.no-data .el-icon {
+  font-size: 48px;
+  color: #dcdfe6;
 }
 </style>

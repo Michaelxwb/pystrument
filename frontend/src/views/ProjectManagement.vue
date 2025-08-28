@@ -1,14 +1,28 @@
 <template>
   <div class="project-management">
     <div class="page-header">
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>
-        创建项目
-      </el-button>
+      <div class="header-left">
+        <span class="title">项目管理</span>
+        <span class="subtitle">创建和管理性能监控项目</span>
+      </div>
+      <div class="header-actions">
+        <el-tooltip content="刷新数据" placement="top">
+          <el-button type="primary" @click="refreshData">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
 
     <!-- 搜索和筛选 -->
     <div class="filter-section">
+      <div class="filter-left">
+        <el-button type="primary" @click="showCreateDialog = true">
+          <el-icon><Plus /></el-icon>
+          创建项目
+        </el-button>
+      </div>
       <el-form :model="filters" inline>
         <el-form-item label="项目名称">
           <el-input
@@ -23,6 +37,7 @@
             v-model="filters.framework"
             placeholder="请选择框架"
             clearable
+            style="width: auto; min-width: 120px;"
           >
             <el-option label="Flask" value="flask" />
             <el-option label="Django" value="django" />
@@ -35,6 +50,7 @@
             v-model="filters.status"
             placeholder="请选择状态"
             clearable
+            style="width: auto; min-width: 120px;"
           >
             <el-option label="活跃" value="active" />
             <el-option label="暂停" value="paused" />
@@ -42,107 +58,134 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadProjects">搜索</el-button>
-          <el-button @click="resetFilters">重置</el-button>
+          <el-button type="primary" @click="loadProjects">
+            <el-icon><Search /></el-icon>
+            搜索
+          </el-button>
+          <el-button @click="resetFilters">
+            <el-icon><RefreshRight /></el-icon>
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- 项目列表 -->
     <div class="project-list">
-      <el-table
-        v-loading="loading"
-        :data="projects"
-        stripe
-        style="width: 100%"
-      >
-        <el-table-column prop="name" label="项目名称" min-width="150">
-          <template #default="{ row }">
-            <div class="project-name">
-              <el-link
-                @click="viewProject(row)"
-                type="primary"
-                :underline="false"
-              >
-                {{ row.name }}
-              </el-link>
-              <el-tag
-                v-if="row.status === 'active'"
-                type="success"
-                size="small"
-                class="status-tag"
-              >
-                活跃
+      <el-card>
+        <template #header>
+          <div class="card-header">
+            <div class="card-title">
+              <el-icon><Collection /></el-icon>
+              <span>项目列表</span>
+            </div>
+          </div>
+        </template>
+        <el-table
+          v-loading="loading"
+          :data="projects"
+          stripe
+          border
+          highlight-current-row
+          style="width: 100%"
+          :empty-text="'暂无项目数据'"
+          :header-cell-style="{backgroundColor: '#f5f7fa', color: '#606266'}"
+        >
+          <el-table-column prop="name" label="项目名称" min-width="150">
+            <template #default="{ row }">
+              <div class="project-name">
+                <el-link
+                  @click="viewProject(row)"
+                  type="primary"
+                  :underline="false"
+                >
+                  {{ row.name }}
+                </el-link>
+                <el-tag
+                  v-if="row.status === 'active'"
+                  type="success"
+                  size="small"
+                  class="status-tag"
+                  effect="dark"
+                >
+                  活跃
+                </el-tag>
+                <el-tag
+                  v-else-if="row.status === 'paused'"
+                  type="warning"
+                  size="small"
+                  class="status-tag"
+                  effect="dark"
+                >
+                  暂停
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <el-table-column prop="framework" label="框架" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getFrameworkTagType(row.framework)" size="small" effect="plain">
+                {{ row.framework }}
               </el-tag>
-              <el-tag
-                v-else-if="row.status === 'paused'"
+            </template>
+          </el-table-column>
+          
+          <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+          
+          <el-table-column label="性能统计" width="150">
+            <template #default="{ row }">
+              <div class="performance-stats">
+                <div>今日请求: {{ row.stats?.today_requests || 0 }}</div>
+                <div>平均响应: {{ row.stats?.avg_response_time || 0 }}ms</div>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <el-table-column prop="created_at" label="创建时间" width="180" sortable>
+            <template #default="{ row }">
+              <el-tooltip :content="formatFullDate(row.created_at)" placement="top">
+                {{ formatDate(row.created_at) }}
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          
+          <el-table-column label="操作" width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                type="primary"
+                size="small"
+                @click="viewProject(row)"
+                circle
+              >
+                <el-icon><View /></el-icon>
+              </el-button>
+              <el-button
                 type="warning"
                 size="small"
-                class="status-tag"
+                @click="editProject(row)"
+                circle
               >
-                暂停
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="framework" label="框架" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getFrameworkTagType(row.framework)" size="small">
-              {{ row.framework }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="description" label="描述" min-width="200" />
-        
-        <el-table-column label="性能统计" width="150">
-          <template #default="{ row }">
-            <div class="performance-stats">
-              <div>今日请求: {{ row.stats?.today_requests || 0 }}</div>
-              <div>平均响应: {{ row.stats?.avg_response_time || 0 }}ms</div>
-            </div>
-          </template>
-        </el-table-column>
-        
-        <el-table-column prop="created_at" label="创建时间" width="180">
-          <template #default="{ row }">
-            {{ formatDate(row.created_at) }}
-          </template>
-        </el-table-column>
-        
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              type="primary"
-              size="small"
-              @click="viewProject(row)"
-            >
-              查看
-            </el-button>
-            <el-button
-              type="warning"
-              size="small"
-              @click="editProject(row)"
-            >
-              编辑
-            </el-button>
-            <el-popconfirm
-              title="确定要删除这个项目吗？"
-              @confirm="deleteProject(row)"
-            >
-              <template #reference>
-                <el-button
-                  type="danger"
-                  size="small"
-                >
-                  删除
-                </el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
+                <el-icon><Edit /></el-icon>
+              </el-button>
+              <el-popconfirm
+                title="确定要删除这个项目吗？"
+                @confirm="deleteProject(row)"
+              >
+                <template #reference>
+                  <el-button
+                    type="danger"
+                    size="small"
+                    circle
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
     </div>
 
     <!-- 分页 -->
@@ -155,6 +198,8 @@
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="loadProjects"
         @current-change="loadProjects"
+        background
+        small
       />
     </div>
 
@@ -245,10 +290,18 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { 
+  Plus, 
+  Refresh, 
+  Search, 
+  RefreshRight, 
+  View, 
+  Edit, 
+  Delete, 
+  Collection 
+} from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
 import type { Project, ProjectCreate, ProjectUpdate } from '@/types/project'
-import PageTitle from '@/components/PageTitle.vue'
 
 // 定义组件名称
 defineOptions({
@@ -275,7 +328,7 @@ const filters = reactive({
 // 分页
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: 10,
   total: 0
 })
 
@@ -396,6 +449,12 @@ const deleteProject = async (project: Project) => {
   }
 }
 
+// 刷新数据
+const refreshData = () => {
+  loadProjects()
+  ElMessage.success('数据刷新成功')
+}
+
 const resetForm = () => {
   editingProject.value = null
   Object.assign(projectForm, {
@@ -420,6 +479,15 @@ const getFrameworkTagType = (framework: string) => {
 }
 
 const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const formatFullDate = (dateString: string) => {
   return new Date(dateString).toLocaleString('zh-CN')
 }
 
@@ -431,14 +499,33 @@ onMounted(() => {
 
 <style scoped>
 .project-management {
-  padding: 20px 20px 20px 20px;
+  padding-top: 15px;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  
+  .header-left {
+    .title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #303133;
+      margin-right: 16px;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #909399;
+    }
+  }
+  
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
 }
 
 .filter-section {
@@ -446,37 +533,53 @@ onMounted(() => {
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-left {
+  margin-right: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  .card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #303133;
+  }
 }
 
 .project-list {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.project-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-tag {
-  margin-left: 8px;
-}
-
-.performance-stats {
-  font-size: 12px;
-  color: #606266;
-}
-
-.performance-stats div {
-  margin-bottom: 2px;
+  .project-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .status-tag {
+    margin-left: 8px;
+  }
+  
+  .performance-stats {
+    font-size: 12px;
+    color: #606266;
+  }
+  
+  .performance-stats div {
+    margin-bottom: 2px;
+  }
 }
 
 .pagination-wrapper {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   margin-top: 20px;
 }
 

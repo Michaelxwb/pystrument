@@ -1,178 +1,293 @@
 <template>
   <div class="dashboard">
+    <div class="page-header">
+      <div class="header-left">
+        <span class="title">系统仪表盘</span>
+        <span class="subtitle">监控性能分析平台的核心指标</span>
+      </div>
+      <div class="header-actions">
+        <el-tooltip content="刷新所有数据" placement="top">
+          <el-button type="primary" @click="refreshAll">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </el-tooltip>
+      </div>
+    </div>
 
+    <!-- 平台概览卡片 -->
+    <div class="overview-section">
+      <h3 class="section-title">平台概览 <el-tooltip content="平台核心指标总览" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+      <div class="overview-cards">
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="hover">
+              <div class="metric-item">
+                <div class="metric-icon projects-icon"><el-icon><Collection /></el-icon></div>
+                <div class="metric-value">{{ stats.totalProjects }}</div>
+                <div class="metric-label">项目总数</div>
+                <div class="metric-desc">平台上的项目总数量</div>
+              </div>
+            </el-card>
+          </el-col>
+          
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="hover">
+              <div class="metric-item">
+                <div class="metric-icon records-icon"><el-icon><Monitor /></el-icon></div>
+                <div class="metric-value">{{ stats.totalRecords }}</div>
+                <div class="metric-label">性能记录</div>
+                <div class="metric-desc">总统计性能记录数量</div>
+              </div>
+            </el-card>
+          </el-col>
+          
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="hover">
+              <div class="metric-item">
+                <div class="metric-icon analysis-icon"><el-icon><DataAnalysis /></el-icon></div>
+                <div class="metric-value">{{ stats.todayAnalysis }}</div>
+                <div class="metric-label">今日分析</div>
+                <div class="metric-desc">今日完成的分析数量</div>
+              </div>
+            </el-card>
+          </el-col>
+          
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="hover">
+              <div class="metric-item">
+                <div class="metric-icon time-icon"><el-icon><Timer /></el-icon></div>
+                <div class="metric-value">{{ stats.avgResponseTime }}ms</div>
+                <div class="metric-label">平均响应时间</div>
+                <div class="metric-desc">所有接口的平均响应时间</div>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+    </div>
 
-    <el-row :gutter="20">
-      <!-- 统计卡片 -->
-      <el-col :span="6">
-        <el-card class="stat-card" v-loading="loading.stats">
-          <div class="stat-content">
-            <div class="stat-number">{{ stats.totalProjects }}</div>
-            <div class="stat-label">项目总数</div>
-          </div>
-          <el-icon class="stat-icon" color="#409EFF"><Collection /></el-icon>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card" v-loading="loading.stats">
-          <div class="stat-content">
-            <div class="stat-number">{{ stats.totalRecords }}</div>
-            <div class="stat-label">性能记录</div>
-          </div>
-          <el-icon class="stat-icon" color="#67C23A"><Monitor /></el-icon>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card" v-loading="loading.stats">
-          <div class="stat-content">
-            <div class="stat-number">{{ stats.todayAnalysis }}</div>
-            <div class="stat-label">今日分析</div>
-          </div>
-          <el-icon class="stat-icon" color="#E6A23C"><DataAnalysis /></el-icon>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="6">
-        <el-card class="stat-card" v-loading="loading.stats">
-          <div class="stat-content">
-            <div class="stat-number">{{ stats.avgResponseTime }}ms</div>
-            <div class="stat-label">平均响应时间</div>
-          </div>
-          <el-icon class="stat-icon" color="#F56C6C"><Timer /></el-icon>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <!-- 性能趋势图 -->
-      <el-col :span="16">
-        <el-card v-loading="loading.trends">
-          <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>性能趋势</span>
-              <el-select v-model="timeRange" @change="loadPerformanceTrends" style="width: 120px;">
-                <el-option label="今天" value="24h" />
-                <el-option label="7天" value="7d" />
-                <el-option label="30天" value="30d" />
-              </el-select>
-            </div>
-          </template>
-          <div ref="performanceChart" style="height: 300px;"></div>
-        </el-card>
-      </el-col>
-
-      <!-- 项目状态 -->
-      <el-col :span="8">
-        <el-card v-loading="loading.projects">
-          <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>项目状态</span>
-              <el-button size="small" @click="refreshProjects" :icon="Refresh"></el-button>
-            </div>
-          </template>
-          <div class="project-list">
-            <div v-for="project in recentProjects" :key="project.key" class="project-item">
-              <div class="project-info">
-                <div class="project-name">{{ project.name }}</div>
-                <div class="project-status">
-                  <el-tag :type="project.status === 'active' ? 'success' : 'info'" size="small">
-                    {{ project.status === 'active' ? '活跃' : '闲置' }}
-                  </el-tag>
+    <!-- 性能与项目状态 -->
+    <div class="performance-section">
+      <h3 class="section-title">性能与项目状态 <el-tooltip content="展示性能趋势与项目状态" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+      <el-row :gutter="20">
+        <!-- 性能趋势图 -->
+        <el-col :span="16">
+          <el-card shadow="hover" class="chart-card">
+            <template #header>
+              <div class="chart-header">
+                <div class="chart-title">
+                  <el-icon><TrendCharts /></el-icon>
+                  <span>性能趋势</span>
+                </div>
+                <div class="chart-actions">
+                  <el-radio-group v-model="timeRange" @change="loadPerformanceTrends" size="small">
+                    <el-radio-button label="24h">今天</el-radio-button>
+                    <el-radio-button label="7d">7天</el-radio-button>
+                    <el-radio-button label="30d">30天</el-radio-button>
+                  </el-radio-group>
                 </div>
               </div>
-              <div class="project-metrics">
-                <span>{{ project.recordCount }} 条记录</span>
+            </template>
+            <div class="chart-container">
+              <div v-if="chartLoading" class="chart-loading">
+                <el-skeleton :rows="5" animated />
+              </div>
+              <div ref="performanceChart" style="height: 300px;"></div>
+            </div>
+          </el-card>
+        </el-col>
+
+        <!-- 项目状态 -->
+        <el-col :span="8">
+          <el-card shadow="hover" class="status-card">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><List /></el-icon>
+                  <span>项目状态</span>
+                </div>
+                <div class="card-actions">
+                  <el-tooltip content="刷新项目列表" placement="top">
+                    <el-button size="small" @click="refreshProjects" circle>
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <div class="project-list">
+              <template v-if="recentProjects.length > 0">
+                <div v-for="project in recentProjects" :key="project.key" class="project-item">
+                  <div class="project-info">
+                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-status">
+                      <el-tag :type="project.status === 'active' ? 'success' : 'info'" size="small" effect="dark">
+                        {{ project.status === 'active' ? '活跃' : '闲置' }}
+                      </el-tag>
+                    </div>
+                  </div>
+                  <div class="project-metrics">
+                    <el-badge :value="project.recordCount" type="primary">
+                      <span>记录数</span>
+                    </el-badge>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="empty-placeholder">
+                <el-empty description="暂无项目数据" :image-size="80"></el-empty>
+                <el-button type="primary" size="small" style="margin-top: 10px;" @click="goToProjects">
+                  创建项目
+                </el-button>
               </div>
             </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
 
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <!-- 最近分析结果 -->
-      <el-col :span="12">
-        <el-card v-loading="loading.analysis">
-          <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>最近分析结果</span>
-              <el-button size="small" @click="refreshAnalysis" :icon="Refresh"></el-button>
-            </div>
-          </template>
-          <el-table :data="recentAnalysis" style="width: 100%">
-            <el-table-column prop="projectName" label="项目" width="120" />
-            <el-table-column prop="type" label="类型" width="80">
-              <template #default="scope">
-                <el-tag size="small">{{ scope.row.type }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="80">
-              <template #default="scope">
-                <el-tag 
-                  :type="scope.row.status === 'completed' ? 'success' : 'warning'" 
-                  size="small"
-                >
-                  {{ scope.row.status === 'completed' ? '完成' : '进行中' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="createdAt" label="时间" />
-          </el-table>
-        </el-card>
-      </el-col>
+    <!-- 分析结果与系统信息 -->
+    <div class="analysis-section">
+      <h3 class="section-title">分析结果与系统信息 <el-tooltip content="展示最新分析结果和系统状态" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+      <el-row :gutter="20">
+        <!-- 最近分析结果 -->
+        <el-col :span="12">
+          <el-card shadow="hover" class="data-card">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><DataAnalysis /></el-icon>
+                  <span>最近分析结果</span>
+                </div>
+                <div class="card-actions">
+                  <el-tooltip content="刷新分析结果" placement="top">
+                    <el-button size="small" @click="refreshAnalysis" circle>
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <el-table 
+              :data="recentAnalysis" 
+              style="width: 100%" 
+              :empty-text="'暂无分析数据'" 
+              :header-cell-style="{backgroundColor: '#f5f7fa', color: '#606266'}"
+              border
+              stripe
+              highlight-current-row
+            >
+              <el-table-column prop="projectName" label="项目" width="120">
+                <template #default="scope">
+                  <el-tooltip :content="scope.row.projectName" placement="top">
+                    <span>{{ scope.row.projectName }}</span>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+              <el-table-column prop="type" label="类型" width="100">
+                <template #default="scope">
+                  <el-tag size="small" effect="plain">{{ scope.row.type }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="100">
+                <template #default="scope">
+                  <el-tag 
+                    :type="scope.row.status === 'completed' ? 'success' : 'warning'" 
+                    size="small"
+                    effect="dark"
+                  >
+                    {{ scope.row.status === 'completed' ? '完成' : '进行中' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="createdAt" label="时间" width="160">
+                <template #default="scope">
+                  <el-tooltip :content="formatFullDateTime(scope.row.createdAt)" placement="top">
+                    <span>{{ formatDateTime(scope.row.createdAt) }}</span>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </el-col>
 
-      <!-- 系统信息 -->
-      <el-col :span="12">
-        <el-card v-loading="loading.systemInfo">
-          <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>系统信息</span>
-              <el-button size="small" @click="refreshSystemInfo" :icon="Refresh"></el-button>
+        <!-- 系统信息 -->
+        <el-col :span="12">
+          <el-card shadow="hover" class="data-card">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><Monitor /></el-icon>
+                  <span>系统信息</span>
+                </div>
+                <div class="card-actions">
+                  <el-tooltip content="刷新系统信息" placement="top">
+                    <el-button size="small" @click="refreshSystemInfo" circle>
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <div class="system-info">
+              <div class="info-item">
+                <span class="info-label">平台版本:</span>
+                <span class="info-value">{{ systemInfo.version }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">运行时间:</span>
+                <span class="info-value">{{ systemInfo.uptime }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">数据库状态:</span>
+                <el-tag :type="systemInfo.dbStatus === '正常' ? 'success' : 'danger'" size="small" effect="dark">{{ systemInfo.dbStatus }}</el-tag>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Redis状态:</span>
+                <el-tag :type="systemInfo.redisStatus === '正常' ? 'success' : 'danger'" size="small" effect="dark">{{ systemInfo.redisStatus }}</el-tag>
+              </div>
+              <div class="info-item">
+                <span class="info-label">CPU使用率:</span>
+                <el-progress :percentage="systemInfo.cpuUsage || 0" :color="getCpuUsageColor"></el-progress>
+              </div>
+              <div class="info-item">
+                <span class="info-label">内存使用率:</span>
+                <el-progress :percentage="systemInfo.memoryUsage || 0" :color="getMemoryUsageColor"></el-progress>
+              </div>
             </div>
-          </template>
-          <div class="system-info">
-            <div class="info-item">
-              <span class="info-label">平台版本:</span>
-              <span class="info-value">{{ systemInfo.version }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">运行时间:</span>
-              <span class="info-value">{{ systemInfo.uptime }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">数据库状态:</span>
-              <el-tag :type="systemInfo.dbStatus === '正常' ? 'success' : 'danger'" size="small">{{ systemInfo.dbStatus }}</el-tag>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Redis状态:</span>
-              <el-tag :type="systemInfo.redisStatus === '正常' ? 'success' : 'danger'" size="small">{{ systemInfo.redisStatus }}</el-tag>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Refresh, 
+  Monitor, 
+  DataAnalysis, 
+  Timer, 
+  Collection, 
+  TrendCharts, 
+  List, 
+  QuestionFilled,
+  Search
+} from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { dashboardApi } from '@/api/dashboard'
 import * as echarts from 'echarts'
-import PageTitle from '@/components/PageTitle.vue'
+import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
 
-// 定义组件名称
-defineOptions({
-  name: 'Dashboard'
-})
+const router = useRouter()
 
 // 响应式数据
 const timeRange = ref('7d')
 const performanceChart = ref()
 let chartInstance: echarts.ECharts | null = null
+const chartLoading = ref(false)
 
 // 加载状态
 const loading = ref({
@@ -212,11 +327,28 @@ const systemInfo = ref({
   version: 'v1.0.0',
   uptime: '0天 0小时',
   dbStatus: '正常',
-  redisStatus: '正常'
+  redisStatus: '正常',
+  cpuUsage: 0,
+  memoryUsage: 0
 })
 
 // 自动刷新定时器
 let autoRefreshTimer: number | null = null
+
+// 计算属性
+const getCpuUsageColor = computed(() => {
+  const usage = systemInfo.value.cpuUsage || 0
+  if (usage < 50) return '#67C23A'
+  if (usage < 80) return '#E6A23C'
+  return '#F56C6C'
+})
+
+const getMemoryUsageColor = computed(() => {
+  const usage = systemInfo.value.memoryUsage || 0
+  if (usage < 60) return '#67C23A'
+  if (usage < 85) return '#E6A23C'
+  return '#F56C6C'
+})
 
 onMounted(() => {
   // 加载所有数据
@@ -309,7 +441,9 @@ const loadSystemInfo = async () => {
       version: response.data.version,
       uptime: response.data.uptime,
       dbStatus: response.data.db_status,
-      redisStatus: response.data.redis_status
+      redisStatus: response.data.redis_status,
+      cpuUsage: response.data.cpu_usage || 0,
+      memoryUsage: response.data.memory_usage || 0
     }
   } catch (error) {
     console.error('加载系统信息失败:', error)
@@ -463,43 +597,175 @@ const refreshProjects = () => loadRecentProjects()
 const refreshAnalysis = () => loadRecentAnalysis()
 const refreshSystemInfo = () => loadSystemInfo()
 
-// 初始化图表
-const initChart = () => {
-  // 图表初始化已移至loadPerformanceTrends中
-  console.log('初始化性能趋势图表')
+// 刷新所有数据
+const refreshAll = () => {
+  loadAllData()
+  ElMessage.success('数据刷新成功')
 }
+
+// 跳转到项目管理页面
+const goToProjects = () => {
+  router.push('/projects')
+}
+
+
 </script>
 
 <style lang="scss" scoped>
 .dashboard {
   padding-top: 15px;
   
-  .stat-card {
-    .el-card__body {
-      padding: 20px;
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    
+    .header-left {
+      .title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #303133;
+        margin-right: 16px;
+      }
+      
+      .subtitle {
+        font-size: 14px;
+        color: #909399;
+      }
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+  }
+  
+  .section-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #303133;
+    margin: 24px 0 16px 0;
+    
+    .el-icon {
+      margin-left: 8px;
+      color: #909399;
+      font-size: 16px;
+      vertical-align: middle;
+    }
+  }
+  
+  .overview-cards {
+    .metric-card {
+      .el-card__body {
+        padding: 20px;
+      }
+      
+      .metric-item {
+        text-align: center;
+        
+        .metric-icon {
+          width: 48px;
+          height: 48px;
+          line-height: 48px;
+          margin: 0 auto 12px;
+          border-radius: 50%;
+          font-size: 24px;
+          color: #fff;
+        }
+        
+        .projects-icon {
+          background: linear-gradient(135deg, #409eff, #52a7ff);
+        }
+        
+        .records-icon {
+          background: linear-gradient(135deg, #67c23a, #76c94f);
+        }
+        
+        .analysis-icon {
+          background: linear-gradient(135deg, #e6a23c, #ebb563);
+        }
+        
+        .time-icon {
+          background: linear-gradient(135deg, #f56c6c, #f78989);
+        }
+        
+        .metric-value {
+          font-size: 28px;
+          font-weight: bold;
+          color: #303133;
+          margin-bottom: 4px;
+        }
+        
+        .metric-label {
+          font-size: 14px;
+          color: #606266;
+          margin-bottom: 4px;
+        }
+        
+        .metric-desc {
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+    }
+  }
+  
+  .chart-card {
+    .chart-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-    }
-    
-    .stat-content {
-      .stat-number {
-        font-size: 28px;
-        font-weight: bold;
+      
+      .chart-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
         color: #303133;
-        line-height: 1;
       }
       
-      .stat-label {
-        font-size: 14px;
-        color: #909399;
-        margin-top: 8px;
+      .chart-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
     }
     
-    .stat-icon {
-      font-size: 32px;
-      opacity: 0.8;
+    .chart-container {
+      position: relative;
+      
+      .chart-loading {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+    }
+  }
+  
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: #303133;
+    }
+    
+    .card-actions {
+      display: flex;
+      gap: 8px;
     }
   }
   
@@ -527,6 +793,11 @@ const initChart = () => {
         font-size: 12px;
         color: #909399;
       }
+    }
+    
+    .empty-placeholder {
+      text-align: center;
+      padding: 20px 0;
     }
   }
   

@@ -1,35 +1,52 @@
 <template>
   <div class="analysis-results">
-
+    <div class="page-header">
+      <div class="header-left">
+        <span class="title">AI分析结果</span>
+        <span class="subtitle">查看和管理所有AI分析报告</span>
+      </div>
+      <div class="header-actions">
+        <el-tooltip content="刷新数据" placement="top">
+          <el-button type="primary" @click="refreshData">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </el-tooltip>
+        <el-button type="primary" @click="triggerNewAnalysis">
+          <el-icon><Plus /></el-icon>
+          新建分析
+        </el-button>
+      </div>
+    </div>
 
     <el-card>
       <template #header>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>分析列表</span>
-          <div>
+        <div class="card-header">
+          <div class="card-title">
+            <el-icon><Document /></el-icon>
+            <span>分析列表</span>
+          </div>
+          <div class="card-actions">
             <el-switch
               v-model="autoRefresh"
               active-text="自动刷新"
               @change="toggleAutoRefresh"
-              style="margin-right: 15px;"
             />
-            <el-button type="primary" @click="refreshData">
-              <el-icon><Refresh /></el-icon>
-              刷新
-            </el-button>
-            <el-button type="primary" @click="triggerNewAnalysis">
-              <el-icon><Plus /></el-icon>
-              新建分析
-            </el-button>
           </div>
         </div>
       </template>
 
       <!-- 筛选条件 -->
       <div class="filter-container">
-        <el-form inline>
+        <el-form :model="filters" inline>
           <el-form-item label="项目:">
-            <el-select v-model="filters.projectKey" placeholder="选择项目" clearable>
+            <el-select 
+              v-model="filters.projectKey" 
+              placeholder="选择项目" 
+              clearable 
+              style="width: auto; min-width: 150px;"
+              @change="handleFilterChange"
+            >
               <el-option
                 v-for="project in projects"
                 :key="project.key"
@@ -39,29 +56,62 @@
             </el-select>
           </el-form-item>
           <el-form-item label="状态:">
-            <el-select v-model="filters.status" placeholder="选择状态" clearable>
+            <el-select 
+              v-model="filters.status" 
+              placeholder="选择状态" 
+              clearable 
+              style="width: auto; min-width: 120px;"
+              @change="handleFilterChange"
+            >
               <el-option label="进行中" value="processing" />
               <el-option label="已完成" value="completed" />
               <el-option label="失败" value="failed" />
             </el-select>
           </el-form-item>
           <el-form-item label="分析类型:">
-            <el-select v-model="filters.analysisType" placeholder="选择类型" clearable>
+            <el-select 
+              v-model="filters.analysisType" 
+              placeholder="选择类型" 
+              clearable 
+              style="width: auto; min-width: 120px;"
+              @change="handleFilterChange"
+            >
               <el-option label="AI分析" value="ai_analysis" />
               <el-option label="性能报告" value="performance_report" />
               <el-option label="趋势分析" value="trend_analysis" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="search">搜索</el-button>
-            <el-button @click="resetFilters">重置</el-button>
+            <el-button type="primary" @click="search">
+              <el-icon><Search /></el-icon>
+              搜索
+            </el-button>
+            <el-button @click="resetFilters">
+              <el-icon><RefreshRight /></el-icon>
+              重置
+            </el-button>
           </el-form-item>
         </el-form>
       </div>
 
       <!-- 分析结果表格 -->
-      <el-table :data="analysisResults" style="width: 100%" v-loading="loading">
-        <el-table-column prop="projectName" label="项目" width="150" />
+      <el-table 
+        :data="analysisResults" 
+        style="width: 100%" 
+        v-loading="loading"
+        stripe
+        border
+        highlight-current-row
+        :empty-text="'暂无分析数据'"
+        :header-cell-style="{backgroundColor: '#f5f7fa', color: '#606266'}"
+      >
+        <el-table-column prop="projectName" label="项目" width="150" show-overflow-tooltip>
+          <template #default="scope">
+            <el-tooltip :content="scope.row.projectName" placement="top">
+              <span>{{ scope.row.projectName }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column prop="analysisType" label="分析类型" width="120">
           <template #default="scope">
             <el-tag size="small">{{ getAnalysisTypeText(scope.row.analysisType) }}</el-tag>
@@ -69,32 +119,52 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="scope">
-            <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+            <el-tag :type="getStatusTagType(scope.row.status)" size="small" effect="dark">
               {{ getStatusText(scope.row.status) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="aiService" label="AI服务" width="100" />
-        <el-table-column prop="summary" label="分析摘要" show-overflow-tooltip />
-        <el-table-column prop="createdAt" label="创建时间" width="160" />
-        <el-table-column prop="completedAt" label="完成时间" width="160" />
-        <el-table-column label="操作" width="200">
+        <el-table-column prop="summary" label="分析摘要" show-overflow-tooltip>
+          <template #default="scope">
+            <el-tooltip :content="scope.row.summary" placement="top">
+              <span>{{ scope.row.summary || '暂无摘要' }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="创建时间" width="160" sortable>
+          <template #default="scope">
+            <el-tooltip :content="formatFullDateTime(scope.row.createdAt)" placement="top">
+              <span>{{ formatDateTime(scope.row.createdAt) }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column prop="completedAt" label="完成时间" width="160" sortable>
+          <template #default="scope">
+            <el-tooltip :content="formatFullDateTime(scope.row.completedAt)" placement="top">
+              <span>{{ formatDateTime(scope.row.completedAt) || '未完成' }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
             <el-button 
-              type="text" 
+              type="primary" 
               size="small" 
               @click="viewDetail(scope.row)"
               :disabled="scope.row.status !== 'completed'"
+              circle
             >
-              查看详情
+              <el-icon><View /></el-icon>
             </el-button>
             <el-dropdown @command="(cmd) => handleDownloadCommand(scope.row, cmd)" trigger="click">
               <el-button 
-                type="text" 
+                type="success" 
                 size="small" 
                 :disabled="scope.row.status !== 'completed'"
+                circle
               >
-                下载报告
+                <el-icon><Download /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -104,19 +174,19 @@
               </template>
             </el-dropdown>
             <el-button 
-              type="text" 
+              type="danger" 
               size="small" 
               @click="deleteAnalysis(scope.row)"
-              style="color: #f56c6c;"
+              circle
             >
-              删除
+              <el-icon><Delete /></el-icon>
             </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <!-- 分页 -->
-      <div style="margin-top: 20px; text-align: center;">
+      <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.size"
@@ -125,6 +195,8 @@
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
+          background
+          small
         />
       </div>
     </el-card>
@@ -135,13 +207,22 @@
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { 
+  Plus, 
+  Refresh, 
+  Search, 
+  RefreshRight, 
+  View, 
+  Download, 
+  Delete,
+  Document
+} from '@element-plus/icons-vue'
 import { analysisApi } from '@/api/analysis'
 import { projectApi } from '@/api/project'
 import { http } from '@/utils/request'
 import { generateAnalysisReportPDF } from '@/utils/reportGenerator'
+import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
 import type { AnalysisRecord } from '@/types/analysis'
-import PageTitle from '@/components/PageTitle.vue'
 
 const router = useRouter()
 
@@ -158,7 +239,7 @@ const filters = ref({
 
 const pagination = ref({
   page: 1,
-  size: 20,
+  size: 10,
   total: 0
 })
 
@@ -200,51 +281,29 @@ const loadProjects = async () => {
 const loadAnalysisResults = async () => {
   loading.value = true
   try {
-    console.log('正在加载分析结果数据...')
-    
-    // 准备查询参数
-    const params: any = {
+    const params = {
       page: pagination.value.page,
-      size: pagination.value.size
+      size: pagination.value.size,
+      status: filters.value.status || undefined,
+      analysis_type: filters.value.analysisType || undefined
     }
     
-    if (filters.value.status) {
-      params.status = filters.value.status
-    }
+    // 使用获取所有分析历史的方法
+    const response = await analysisApi.getAllAnalysisHistory(params)
     
-    if (filters.value.analysisType) {
-      params.analysis_type = filters.value.analysisType
-    }
-    
-    let response
-    
-    // 根据是否选择了项目，调用不同的API
-    if (filters.value.projectKey) {
-      response = await analysisApi.getAnalysisHistory(filters.value.projectKey, params)
-    } else {
-      // 调用获取所有项目分析记录的API
-      response = await http.get('/v1/analysis/history', params)
-    }
-    
-    // 处理响应数据
-    const data = response.data
-    
-    // 更新分析结果和分页信息
-    analysisResults.value = data.records.map((record: AnalysisRecord) => ({
-      id: record.analysis_id,
-      projectKey: record.project_key,
-      projectName: record.project_name || '未知项目',
-      analysisType: record.analysis_type || 'ai_analysis',
-      status: convertStatus(record.status),
-      aiService: record.ai_service,
-      summary: record.results?.summary || getStatusSummary(record.status),
-      createdAt: record.created_at,
-      completedAt: record.updated_at
+    analysisResults.value = response.data.records.map((item: any) => ({
+      id: item._id || item.id,
+      ...item,
+      projectName: item.project_name || item.projectKey || '未知项目',
+      analysisType: item.analysis_type || 'ai_analysis',
+      status: item.status || 'pending',
+      aiService: item.ai_service || 'default',
+      summary: item.summary || item.results?.summary || '',
+      createdAt: item.created_at || '',
+      completedAt: item.completed_at || ''
     }))
     
-    pagination.value.total = data.total
-    
-    console.log(`成功加载${analysisResults.value.length}条分析结果数据`)
+    pagination.value.total = response.data.total
   } catch (error) {
     console.error('加载分析结果失败:', error)
     ElMessage.error('加载分析结果失败')
@@ -253,54 +312,10 @@ const loadAnalysisResults = async () => {
   }
 }
 
-// 状态转换函数，将后端状态转换为前端状态
-const convertStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'PENDING': 'processing',
-    'IN_PROGRESS': 'processing',
-    'COMPLETED': 'completed',
-    'FAILURE': 'failed',
-    'CANCELED': 'failed'
-  }
-  return statusMap[status] || status.toLowerCase()
-}
-
-// 根据状态获取摘要文本
-const getStatusSummary = (status: string): string => {
-  const summaryMap: Record<string, string> = {
-    'PENDING': '等待分析...',
-    'IN_PROGRESS': '正在分析中...',
-    'FAILURE': '分析失败',
-    'CANCELED': '分析已取消'
-  }
-  return summaryMap[status] || '未知状态'
-}
-
-const getAnalysisTypeText = (type: string) => {
-  const types: Record<string, string> = {
-    'ai_analysis': 'AI分析',
-    'performance_report': '性能报告',
-    'trend_analysis': '趋势分析'
-  }
-  return types[type] || type
-}
-
-const getStatusText = (status: string) => {
-  const statusTexts: Record<string, string> = {
-    'processing': '进行中',
-    'completed': '已完成',
-    'failed': '失败'
-  }
-  return statusTexts[status] || status
-}
-
-const getStatusTagType = (status: string) => {
-  const types: Record<string, string> = {
-    'processing': 'warning',
-    'completed': 'success',
-    'failed': 'danger'
-  }
-  return types[status] || 'info'
+const handleFilterChange = () => {
+  // 筛选条件变化时自动触发搜索
+  pagination.value.page = 1
+  loadAnalysisResults()
 }
 
 const search = () => {
@@ -314,10 +329,13 @@ const resetFilters = () => {
     status: '',
     analysisType: ''
   }
+  pagination.value.page = 1
+  loadAnalysisResults()
 }
 
 const handleSizeChange = (size: number) => {
   pagination.value.size = size
+  pagination.value.page = 1
   loadAnalysisResults()
 }
 
@@ -326,15 +344,16 @@ const handleCurrentChange = (page: number) => {
   loadAnalysisResults()
 }
 
-// 自动刷新相关方法
 const startAutoRefresh = () => {
-  if (autoRefresh.value && !refreshInterval.value) {
-    console.log('启动自动刷新, 间隔:', refreshRate, 'ms')
-    refreshInterval.value = window.setInterval(() => {
-      console.log('自动刷新分析结果数据')
-      loadAnalysisResults()
-    }, refreshRate)
+  if (refreshInterval.value) {
+    stopAutoRefresh()
   }
+  
+  console.log('启动自动刷新，间隔:', refreshRate, 'ms')
+  refreshInterval.value = window.setInterval(() => {
+    console.log('自动刷新分析结果数据')
+    loadAnalysisResults()
+  }, refreshRate)
 }
 
 const stopAutoRefresh = () => {
@@ -355,6 +374,7 @@ const toggleAutoRefresh = () => {
 
 const refreshData = () => {
   loadAnalysisResults()
+  ElMessage.success('数据刷新成功')
 }
 
 // 组件卸载时清除定时器
@@ -515,11 +535,86 @@ const deleteAnalysis = async (row: any) => {
   }
 }
 
+// 辅助方法
+const getAnalysisTypeText = (type: string) => {
+  switch (type) {
+    case 'ai_analysis': return 'AI分析'
+    case 'performance_report': return '性能报告'
+    case 'trend_analysis': return '趋势分析'
+    default: return '未知类型'
+  }
+}
+
+const getStatusTagType = (status: string) => {
+  switch (status) {
+    case 'pending': return 'info'
+    case 'processing': return 'warning'
+    case 'completed': return 'success'
+    case 'failed': return 'danger'
+    default: return 'info'
+  }
+}
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'pending': return '待处理'
+    case 'processing': return '处理中'
+    case 'completed': return '已完成'
+    case 'failed': return '失败'
+    default: return '未知'
+  }
+}
 </script>
 
 <style lang="scss" scoped>
 .analysis-results {
   padding-top: 15px;
+  
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    
+    .header-left {
+      .title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #303133;
+        margin-right: 16px;
+      }
+      
+      .subtitle {
+        font-size: 14px;
+        color: #909399;
+      }
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+  }
+  
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: #303133;
+    }
+    
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+  }
   
   .filter-container {
     margin-bottom: 20px;
@@ -529,7 +624,18 @@ const deleteAnalysis = async (row: any) => {
     
     .el-form {
       margin-bottom: 0;
+      
+      .el-form-item {
+        margin-bottom: 0;
+        margin-right: 15px;
+      }
     }
+  }
+  
+  .pagination-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
   }
 }
 </style>

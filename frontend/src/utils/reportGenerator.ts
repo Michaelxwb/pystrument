@@ -1,6 +1,8 @@
 // PDF报告生成工具
 
 import type { AnalysisRecord, AnalysisResults } from '@/types/analysis'
+import jsPDF from 'jspdf'
+import { formatDateTime } from '@/utils/dateUtils'
 
 /**
  * 使用直接输出HTML的方式生成报告
@@ -446,18 +448,7 @@ function getScoreLevelText(score: number): string {
   return '较差'
 }
 
-/**
- * 格式化日期时间
- */
-function formatDateTime(dateString?: string): string {
-  if (!dateString) return '-'
-  try {
-    return new Date(dateString).toLocaleString('zh-CN')
-  } catch (error) {
-    console.error('日期格式化失败:', error);
-    return dateString || '-'
-  }
-}
+// 移除本地的formatDateTime函数，使用从dateUtils导入的函数
 
 export default {
   generateAnalysisReportPDF

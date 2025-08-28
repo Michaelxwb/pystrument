@@ -1,19 +1,33 @@
 <template>
   <div class="project-detail">
     <div class="page-header">
-      <el-button @click="$router.go(-1)" type="text">
-        <el-icon><ArrowLeft /></el-icon>
-        返回项目列表
-      </el-button>
-      <h1>{{ project.name || '项目名称' }}</h1>
-      <p>项目键: {{ projectKey }}</p>
+      <div class="header-left">
+        <el-button @click="$router.go(-1)" type="text" class="back-button">
+          <el-icon><ArrowLeft /></el-icon>
+          返回项目列表
+        </el-button>
+        <span class="title">{{ project.name || '项目详情' }}</span>
+      </div>
+      <div class="header-actions">
+        <el-tooltip content="刷新所有数据" placement="top">
+          <el-button type="primary" @click="refreshAll">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
 
     <el-row :gutter="20">
       <el-col :span="16">
         <el-card v-loading="loading">
           <template #header>
-            <span>项目信息</span>
+            <div class="card-header">
+              <div class="card-title">
+                <el-icon><Document /></el-icon>
+                <span>项目信息</span>
+              </div>
+            </div>
           </template>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="项目名称">{{ project.name || '未设置' }}</el-descriptions-item>
@@ -45,48 +59,62 @@
 
         <el-card style="margin-top: 20px;" v-loading="recordsLoading">
           <template #header>
-            <div class="card-header-with-actions">
-              <span>最近性能记录</span>
-              <el-button size="small" type="primary" @click="loadRecentRecords">
-                <el-icon><Refresh /></el-icon>
-                刷新
-              </el-button>
+            <div class="card-header">
+              <div class="card-title">
+                <el-icon><DataLine /></el-icon>
+                <span>最近性能记录</span>
+              </div>
+              <div class="card-actions">
+                <el-button size="small" type="primary" @click="loadRecentRecords">
+                  <el-icon><Refresh /></el-icon>
+                  刷新
+                </el-button>
+              </div>
             </div>
           </template>
           <div v-if="recentRecords.length === 0" class="empty-data">
-            暂无性能记录数据
+            <el-empty description="暂无性能记录数据" />
           </div>
-          <el-table v-else :data="recentRecords" style="width: 100%" stripe>
-            <el-table-column prop="path" label="请求路径" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="method" label="方法" width="80">
+          <el-table v-else :data="recentRecords" style="width: 100%" stripe border>
+            <el-table-column prop="path" label="请求路径" min-width="180" show-overflow-tooltip>
               <template #default="scope">
-                <el-tag size="small" :type="getMethodTagType(scope.row.method)">
+                <el-tag :type="getMethodTagType(scope.row.method)" size="small" effect="plain">
                   {{ scope.row.method }}
                 </el-tag>
+                <span style="margin-left: 8px;">{{ scope.row.path }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="duration" label="耗时" width="100">
+            <el-table-column prop="duration" label="耗时" width="100" sortable>
               <template #default="scope">
-                <span :class="getDurationClass(scope.row.duration)">
-                  {{ scope.row.duration }}ms
-                </span>
+                <el-tooltip :content="getDurationTooltip(scope.row.duration)" placement="top">
+                  <span :class="getDurationClass(scope.row.duration)">
+                    {{ scope.row.duration }}ms
+                  </span>
+                </el-tooltip>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态码" width="80">
+            <el-table-column prop="status" label="状态码" width="100" sortable>
               <template #default="scope">
                 <el-tag 
                   size="small" 
-                  :type="scope.row.status >= 400 ? 'danger' : (scope.row.status >= 300 ? 'warning' : 'success')"
+                  :type="getStatusTagType(scope.row.status)"
+                  effect="dark"
                 >
                   {{ scope.row.status }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="timestamp" label="时间" width="160" />
-            <el-table-column label="操作" width="100" fixed="right">
+            <el-table-column prop="timestamp" label="时间" width="160" sortable>
               <template #default="scope">
-                <el-button type="text" size="small" @click="viewDetail(scope.row)">
-                  查看详情
+                <el-tooltip :content="formatFullDateTime(scope.row.timestamp)" placement="top">
+                  <span>{{ formatDateTime(scope.row.timestamp) }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="scope">
+                <el-button type="primary" size="small" @click="viewDetail(scope.row)" circle>
+                  <el-icon><View /></el-icon>
                 </el-button>
               </template>
             </el-table-column>
@@ -102,28 +130,37 @@
       <el-col :span="8">
         <el-card v-loading="statsLoading">
           <template #header>
-            <div class="card-header-with-actions">
-              <span>性能统计</span>
-              <el-button size="small" type="primary" @click="loadProjectStats">
-                <el-icon><Refresh /></el-icon>
-                刷新
-              </el-button>
+            <div class="card-header">
+              <div class="card-title">
+                <el-icon><Odometer /></el-icon>
+                <span>性能统计</span>
+              </div>
+              <div class="card-actions">
+                <el-button size="small" type="primary" @click="loadProjectStats">
+                  <el-icon><Refresh /></el-icon>
+                  刷新
+                </el-button>
+              </div>
             </div>
           </template>
           <div class="stats-container">
             <div class="stat-item">
+              <div class="stat-icon total-icon"><el-icon><DataAnalysis /></el-icon></div>
               <div class="stat-value">{{ projectStats.totalRecords }}</div>
               <div class="stat-label">总请求数</div>
             </div>
             <div class="stat-item">
+              <div class="stat-icon avg-icon"><el-icon><Timer /></el-icon></div>
               <div class="stat-value">{{ projectStats.avgDuration }}ms</div>
               <div class="stat-label">平均响应时间</div>
             </div>
             <div class="stat-item">
+              <div class="stat-icon slow-icon"><el-icon><Warning /></el-icon></div>
               <div class="stat-value">{{ projectStats.slowQueries }}</div>
               <div class="stat-label">慢查询数</div>
             </div>
             <div class="stat-item">
+              <div class="stat-icon error-icon"><el-icon><CircleClose /></el-icon></div>
               <div class="stat-value">{{ projectStats.errorRate }}%</div>
               <div class="stat-label">错误率</div>
             </div>
@@ -137,7 +174,12 @@
 
         <el-card style="margin-top: 20px;" v-loading="configSaving">
           <template #header>
-            <span>项目配置</span>
+            <div class="card-header">
+              <div class="card-title">
+                <el-icon><Setting /></el-icon>
+                <span>项目配置</span>
+              </div>
+            </div>
           </template>
           <div class="config-container">
             <div class="config-item">
@@ -180,10 +222,25 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { 
+  ArrowLeft, 
+  Refresh, 
+  Document, 
+  DataLine, 
+  Odometer, 
+  DataAnalysis, 
+  Timer, 
+  Warning, 
+  CircleClose, 
+  Setting,
+  View,
+  ArrowRight
+} from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
 import { performanceApi } from '@/api/performance'
 import type { Project } from '@/types/project'
 import type { PerformanceRecord } from '@/types/performance'
+import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
 
 // 定义组件名称
 defineOptions({
@@ -301,7 +358,7 @@ const loadProjectStats = async () => {
       avgDuration: stats.avg_response_time || 0,
       slowQueries: await getSlowQueriesCount(),
       errorRate: stats.total_requests > 0 
-        ? ((stats.total_requests - stats.today_requests) / stats.total_requests * 100).toFixed(1)
+        ? ((stats.failed_requests || 0) / stats.total_requests * 100).toFixed(1)
         : 0
     }
     
@@ -339,11 +396,11 @@ const loadRecentRecords = async () => {
     
     recentRecords.value = response.data.records.map(record => ({
       trace_id: record.trace_id,
-      path: record.request_path || '',
+      path: record.request_path || '/',
       method: record.request_method || 'GET',
       duration: Math.round((record.duration || 0) * 1000), // 转为毫秒
       status: record.status_code || 200,
-      timestamp: formatDateTime(record.timestamp)
+      timestamp: record.timestamp || ''
     }))
     
     console.log('最近性能记录加载成功:', recentRecords.value)
@@ -380,6 +437,14 @@ const updateConfig = async () => {
   }
 }
 
+// 刷新所有数据
+const refreshAll = () => {
+  loadProjectData()
+  loadProjectStats()
+  loadRecentRecords()
+  ElMessage.success('数据刷新成功')
+}
+
 const getMethodTagType = (method: string) => {
   const types: Record<string, string> = {
     'GET': 'success',
@@ -390,49 +455,83 @@ const getMethodTagType = (method: string) => {
   return types[method] || 'info'
 }
 
-const getDurationClass = (duration: number) => {
-  if (duration > 500) return 'text-danger'
-  if (duration > 200) return 'text-warning'
-  return 'text-success'
+const getStatusTagType = (status: number) => {
+  if (status >= 200 && status < 300) return 'success'
+  if (status >= 400 && status < 500) return 'warning'
+  if (status >= 500) return 'danger'
+  return 'info'
 }
 
-const formatDateTime = (dateString?: string) => {
-  if (!dateString) return ''
-  try {
-    return new Date(dateString).toLocaleString('zh-CN')
-  } catch (error) {
-    return dateString
-  }
+const getDurationClass = (duration: number) => {
+  if (duration > 1000) return 'duration-very-slow'
+  if (duration > 500) return 'duration-slow'
+  if (duration > 200) return 'duration-normal'
+  return 'duration-fast'
 }
+
+const getDurationTooltip = (duration: number) => {
+  if (duration > 1000) return '响应时间很长，需要优化'
+  if (duration > 500) return '响应时间较长，建议检查'
+  if (duration > 200) return '响应时间正常'
+  return '响应时间很快'
+}
+
+
 
 const viewDetail = (record: any) => {
   router.push(`/performance/${record.trace_id}`)
 }
-
 </script>
 
 <style lang="scss" scoped>
 .project-detail {
-  .page-header {
-    margin-bottom: 24px;
-    
-    h1 {
-      margin: 8px 0;
-      color: #303133;
-      font-size: 24px;
-    }
-    
-    p {
-      margin: 0;
-      color: #909399;
-      font-size: 14px;
-    }
-  }
+  padding-top: 15px;
   
-  .card-header-with-actions {
+  .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 24px;
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      
+      .back-button {
+        padding: 0;
+      }
+      
+      .title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #303133;
+      }
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+  }
+  
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: #303133;
+    }
+    
+    .card-actions {
+      display: flex;
+      gap: 8px;
+    }
   }
   
   .stats-container {
@@ -445,11 +544,43 @@ const viewDetail = (record: any) => {
       padding: 16px;
       background: #f8f9fa;
       border-radius: 8px;
+      transition: all 0.3s;
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+      }
+      
+      .stat-icon {
+        width: 36px;
+        height: 36px;
+        line-height: 36px;
+        margin: 0 auto 8px;
+        border-radius: 50%;
+        font-size: 18px;
+        color: #fff;
+      }
+      
+      .total-icon {
+        background: linear-gradient(135deg, #409eff, #52a7ff);
+      }
+      
+      .avg-icon {
+        background: linear-gradient(135deg, #67c23a, #76c94f);
+      }
+      
+      .slow-icon {
+        background: linear-gradient(135deg, #e6a23c, #ebb563);
+      }
+      
+      .error-icon {
+        background: linear-gradient(135deg, #f56c6c, #f78989);
+      }
       
       .stat-value {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: bold;
-        color: #409EFF;
+        color: #303133;
         margin-bottom: 4px;
       }
       
@@ -482,8 +613,6 @@ const viewDetail = (record: any) => {
   .empty-data {
     text-align: center;
     padding: 40px 0;
-    color: #909399;
-    font-size: 14px;
   }
   
   .view-more {
@@ -491,16 +620,24 @@ const viewDetail = (record: any) => {
     text-align: center;
   }
   
-  .text-success {
+  .duration-fast {
     color: #67C23A;
+    font-weight: 500;
   }
   
-  .text-warning {
+  .duration-normal {
+    color: #409EFF;
+    font-weight: 500;
+  }
+  
+  .duration-slow {
     color: #E6A23C;
+    font-weight: 500;
   }
   
-  .text-danger {
+  .duration-very-slow {
     color: #F56C6C;
+    font-weight: 500;
   }
   
   .text-muted {

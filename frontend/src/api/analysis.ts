@@ -38,6 +38,24 @@ export const analysisApi = {
     return http.get<TaskStatus>(`/v1/analysis/task-status/${taskId}`)
   },
 
+  // 获取所有项目的分析历史
+  getAllAnalysisHistory(
+    params?: {
+      page?: number
+      size?: number
+      status?: string
+      analysis_type?: string
+    }
+  ) {
+    return http.get<{
+      records: AnalysisRecord[]
+      total: number
+      page: number
+      size: number
+      pages: number
+    }>('/v1/analysis/history', params)
+  },
+
   // 获取项目的分析历史
   getAnalysisHistory(
     projectKey: string,
