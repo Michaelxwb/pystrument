@@ -6,8 +6,11 @@ from typing import Optional, Dict, Any, List
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 import redis.asyncio as aioredis
+from datetime import datetime
 
 from app.config.settings import settings
+from app.models.analysis import AnalysisRecord
+from app.models.analysis import AnalysisRecord
 
 logger = logging.getLogger(__name__)
 
@@ -311,3 +314,197 @@ class RedisUtils:
         except Exception as e:
             logger.error(f"递增计数器失败: {str(e)}")
             return 0
+
+
+class DatabaseManager:
+    """数据库管理器"""
+    
+    def __init__(self):
+        self.utils = DatabaseUtils()
+        self.redis_utils = RedisUtils()
+    
+    async def get_performance_record(self, record_id: str) -> Optional[Dict[str, Any]]:
+        """获取性能记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.performance_records
+            record = await collection.find_one({"trace_id": record_id})
+            
+            if record:
+                record.pop("_id", None)  # 移除MongoDB的_id字段
+            
+            return record
+        except Exception as e:
+            logger.error(f"获取性能记录失败: {str(e)}")
+            return None
+    
+    async def save_analysis_record(self, analysis_record: AnalysisRecord) -> bool:
+        """保存分析记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.ai_analysis_results
+            record_dict = analysis_record.dict()
+            
+            # 如果记录已存在则更新，否则插入
+            await collection.replace_one(
+                {"analysis_id": analysis_record.analysis_id}, 
+                record_dict, 
+                upsert=True
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"保存分析记录失败: {str(e)}")
+            return False
+    
+    async def cleanup_old_analysis_records(self, cutoff_date: datetime) -> Dict[str, Any]:
+        """清理旧的分析记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.ai_analysis_results
+            result = await collection.delete_many({"created_at": {"$lt": cutoff_date}})
+            
+            return {"deleted_count": result.deleted_count}
+        except Exception as e:
+            logger.error(f"清理旧分析记录失败: {str(e)}")
+            return {"deleted_count": 0}
+    
+    async def get_performance_records_by_date_range(
+        self, 
+        project_key: str, 
+        start_date: datetime, 
+        end_date: datetime
+    ) -> List[Dict[str, Any]]:
+        """根据日期范围获取性能记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.performance_records
+            query = {
+                "project_key": project_key,
+                "timestamp": {
+                    "$gte": start_date,
+                    "$lte": end_date
+                }
+            }
+            
+            cursor = collection.find(query).sort("timestamp", 1)
+            records = []
+            async for record in cursor:
+                record.pop("_id", None)
+                records.append(record)
+            
+            return records
+        except Exception as e:
+            logger.error(f"获取性能记录失败: {str(e)}")
+            return []
+    
+    async def get_analysis_record_by_id(self, analysis_id: str) -> Optional[AnalysisRecord]:
+        """根据ID获取分析记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.ai_analysis_results
+            record = await collection.find_one({"analysis_id": analysis_id})
+            
+            if record:
+                record.pop("_id", None)  # 移除MongoDB的_id字段
+                return AnalysisRecord(**record)
+            
+            return None
+        except Exception as e:
+            logger.error(f"根据ID获取分析记录失败: {str(e)}")
+            return None
+    
+    async def update_task_status(self, task_id: str, status: str, progress: int, updated_at: datetime) -> bool:
+        """更新任务状态"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.analysis_tasks
+            result = await collection.update_one(
+                {"task_id": task_id},
+                {"$set": {
+                    "status": status,
+                    "progress": progress,
+                    "updated_at": updated_at
+                }}
+            )
+            
+            if result.modified_count == 0:
+                logger.warning(f"更新任务状态失败，任务不存在: {task_id}")
+                return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"更新任务状态失败: {str(e)}")
+            return False
+    
+    async def get_analysis_records_by_date_range(
+        self, 
+        project_key: str, 
+        start_date: datetime, 
+        end_date: datetime
+    ) -> List[Dict[str, Any]]:
+        """根据日期范围获取分析记录"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.ai_analysis_results
+            query = {
+                "project_key": project_key,
+                "created_at": {
+                    "$gte": start_date,
+                    "$lte": end_date
+                }
+            }
+            
+            cursor = collection.find(query).sort("created_at", 1)
+            records = []
+            async for record in cursor:
+                record.pop("_id", None)
+                records.append(record)
+            
+            return records
+        except Exception as e:
+            logger.error(f"获取分析记录失败: {str(e)}")
+            return []
+    
+    async def save_performance_report(self, report_id: str, report_data: Dict[str, Any]) -> bool:
+        """保存性能报告"""
+        try:
+            db = get_database()
+            if db is None:
+                raise Exception("数据库未初始化")
+            
+            collection = db.performance_reports
+            report_data["id"] = report_id
+            report_data["created_at"] = datetime.utcnow()
+            
+            await collection.replace_one({"id": report_id}, report_data, upsert=True)
+            
+            return True
+        except Exception as e:
+            logger.error(f"保存性能报告失败: {str(e)}")
+            return False
+
+
+# 创建全局数据库管理器实例
+db_manager = DatabaseManager()

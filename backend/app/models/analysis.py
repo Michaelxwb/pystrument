@@ -23,6 +23,41 @@ class AnalysisStatus(str, Enum):
     CANCELED = "CANCELED"
 
 
+class BottleneckAnalysis(BaseModel):
+    """瓶颈分析模型"""
+    type: str = Field(..., description="瓶颈类型")
+    severity: str = Field(..., description="严重程度")
+    function: str = Field(..., description="相关函数")
+    description: str = Field(..., description="描述")
+    impact: float = Field(..., description="影响程度(0-1)")
+
+
+class OptimizationSuggestion(BaseModel):
+    """优化建议模型"""
+    category: str = Field(..., description="建议类别")
+    priority: str = Field(..., description="优先级")
+    title: str = Field(..., description="标题")
+    description: str = Field(..., description="描述")
+    code_example: Optional[str] = Field(None, description="代码示例")
+    expected_improvement: Optional[str] = Field(None, description="预期改进")
+
+
+class RiskAssessment(BaseModel):
+    """风险评估模型"""
+    current_risks: List[str] = Field(default=[], description="当前风险")
+    potential_issues: List[str] = Field(default=[], description="潜在问题")
+    recommendations: List[str] = Field(default=[], description="建议")
+
+
+class AnalysisResults(BaseModel):
+    """分析结果模型"""
+    performance_score: float = Field(..., description="性能评分(0-100)")
+    bottleneck_analysis: List[BottleneckAnalysis] = Field(default=[], description="性能瓶颈分析")
+    optimization_suggestions: List[OptimizationSuggestion] = Field(default=[], description="优化建议")
+    risk_assessment: RiskAssessment = Field(default=RiskAssessment(), description="风险评估")
+    summary: Optional[str] = Field(None, description="分析总结")
+
+
 class AnalysisRequest(BaseModel):
     """分析请求模型"""
     ai_service: str = Field(default="default", description="AI服务名称")
@@ -49,15 +84,6 @@ class TaskStatus(BaseModel):
     updated_at: datetime = Field(..., description="更新时间")
     estimated_completion: Optional[datetime] = Field(None, description="预计完成时间")
     error: Optional[str] = Field(None, description="错误信息")
-
-
-class AnalysisResults(BaseModel):
-    """分析结果模型"""
-    summary: str = Field(..., description="分析总结")
-    performance_score: int = Field(..., description="性能评分")
-    bottlenecks: List[Dict[str, Any]] = Field(..., description="性能瓶颈")
-    recommendations: List[str] = Field(..., description="改进建议")
-    details: Optional[Dict[str, Any]] = Field(None, description="详细分析数据")
 
 
 class AnalysisRecord(BaseModel):

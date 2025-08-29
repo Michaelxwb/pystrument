@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     
     # AI服务配置
     openai_api_key: str = ""
+    aliyun_qianwen_api_key: str = ""
     ai_service_timeout: int = 30
     
     # 监控配置

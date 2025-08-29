@@ -287,20 +287,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Plus, 
-  Refresh, 
-  Search, 
-  RefreshRight, 
-  View, 
-  Edit, 
-  Delete, 
-  Collection 
+import type { FormInstance, FormRules } from 'element-plus'
+import {
+  Plus,
+  Refresh,
+  RefreshRight,
+  Search,
+  View,
+  Edit,
+  Delete,
+  Collection
 } from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
+import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
 import type { Project, ProjectCreate, ProjectUpdate } from '@/types/project'
 
 // 定义组件名称
@@ -359,7 +361,7 @@ const projectFormRules = {
   ]
 }
 
-const projectFormRef = ref()
+const projectFormRef = ref<FormInstance>()
 
 // 方法
 const loadProjects = async () => {
@@ -479,16 +481,11 @@ const getFrameworkTagType = (framework: string) => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return formatDateTime(dateString)
 }
 
 const formatFullDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString('zh-CN')
+  return formatFullDateTime(dateString)
 }
 
 // 生命周期

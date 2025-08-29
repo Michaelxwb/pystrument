@@ -91,7 +91,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: pystrument-celery
-    command: celery -A app.tasks worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.ai_analysis.celery_app worker --loglevel=info --concurrency=2 -Q analysis,batch,maintenance,reports
     environment:
       # 数据库配置
       - MONGODB_URL=mongodb://admin:${MONGODB_PASSWORD:-admin123}@mongodb:27017/pystrument?authSource=admin

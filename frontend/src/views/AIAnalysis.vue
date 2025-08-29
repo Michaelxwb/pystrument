@@ -134,7 +134,7 @@
         <el-card>
           <template #header>
             <div class="section-header">
-              <el-icon><Bulb /></el-icon>
+              <el-icon><Lightning /></el-icon>
               <span>建议详情</span>
               <el-tag type="primary" size="small">
                 {{ analysisData.optimization_suggestions?.length || 0 }} 条建议
@@ -201,7 +201,7 @@
         <el-card>
           <template #header>
             <div class="section-header">
-              <el-icon><Shield /></el-icon>
+              <el-icon><Lock /></el-icon>
               <span>风险详情</span>
             </div>
           </template>
@@ -325,8 +325,8 @@ import {
   Download,
   Loading,
   Warning,
-  Bulb,
-  Shield,
+  Lightning,
+  Lock,
   SuccessFilled,
   InfoFilled,
   Close,
@@ -385,14 +385,9 @@ const loadAnalysisData = async () => {
         if (response.data.results) {
           analysisData.value = {
             performance_score: response.data.results.performance_score,
-            bottleneck_analysis: response.data.results.bottlenecks || [],
-            optimization_suggestions: response.data.results.recommendations ? response.data.results.recommendations.map((item: string, index: number) => ({
-              priority: index < 1 ? 'high' : index < 3 ? 'medium' : 'low',
-              title: item,
-              description: item,
-              category: 'general'
-            })) : [],
-            risk_assessment: {
+            bottleneck_analysis: response.data.results.bottleneck_analysis || [],
+            optimization_suggestions: response.data.results.optimization_suggestions || [],
+            risk_assessment: response.data.results.risk_assessment || {
               current_risks: [],
               potential_issues: [],
               recommendations: []
@@ -468,14 +463,9 @@ const triggerAnalysis = async () => {
           if (resultResponse.data.results) {
             analysisData.value = {
               performance_score: resultResponse.data.results.performance_score,
-              bottleneck_analysis: resultResponse.data.results.bottlenecks || [],
-              optimization_suggestions: resultResponse.data.results.recommendations ? resultResponse.data.results.recommendations.map((item: string, index: number) => ({
-                priority: index < 1 ? 'high' : index < 3 ? 'medium' : 'low',
-                title: item,
-                description: item,
-                category: 'general'
-              })) : [],
-              risk_assessment: {
+              bottleneck_analysis: resultResponse.data.results.bottleneck_analysis || [],
+              optimization_suggestions: resultResponse.data.results.optimization_suggestions || [],
+              risk_assessment: resultResponse.data.results.risk_assessment || {
                 current_risks: [],
                 potential_issues: [],
                 recommendations: []

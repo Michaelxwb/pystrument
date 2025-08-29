@@ -10,26 +10,12 @@ from datetime import datetime, timedelta
 from app.utils.response import success_response, error_response
 from app.utils.database import get_database
 from app.models.analysis import AnalysisRequest, TaskStatus, AnalysisRecord
+from app.tasks.ai_analysis import analyze_performance_task
+from app.services.ai_config import ai_config_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-@router.get("/")
-async def list_analysis():
-    """列出所有分析记录"""
-    return success_response({
-        "message": "AI分析服务正在开发中",
-        "available_endpoints": [
-            "/analyze/{performance_record_id}",
-            "/batch-analyze",
-            "/result/{analysis_id}",
-            "/task-status/{task_id}",
-            "/history",
-            "/history/{project_key}"
-        ]
-    })
 
 
 @router.post("/analyze/{performance_record_id}")
@@ -49,63 +35,76 @@ async def analyze_performance(
         logger.warning(f"性能记录不存在: {performance_record_id}")
         raise HTTPException(status_code=404, detail=f"性能记录不存在: {performance_record_id}")
     
-    # 创建分析任务
-    task_id = str(uuid.uuid4())
-    analysis_id = f"analysis_{performance_record_id}_{task_id[:8]}"
+    # 处理AI服务名称
+    ai_service_name = request.ai_service
+    if ai_service_name == "default":
+        # 使用配置管理器中的默认服务
+        ai_service_name = ai_config_manager.default_service
+        logger.info(f"使用默认AI服务: {ai_service_name}")
     
-    # 创建任务状态记录
-    task_status = {
-        "task_id": task_id,
-        "analysis_id": analysis_id,
-        "status": "PENDING",
-        "progress": 0,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "estimated_completion": datetime.utcnow() + timedelta(minutes=2)
-    }
+    # 创建分析ID
+    analysis_id = f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}"
     
-    await db.analysis_tasks.insert_one(task_status)
-    
-    # 创建分析记录
-    analysis_record = {
-        "analysis_id": analysis_id,
-        "performance_record_id": performance_record_id,
-        "project_key": performance_record.get("project_key"),
-        "ai_service": request.ai_service,
-        "status": "PENDING",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "results": None,
-        "task_id": task_id,
-        "priority": request.priority
-    }
-    
-    await db.analysis_records.insert_one(analysis_record)
-    
-    # 这里应该异步触发实际的分析任务
-    # 在实际实现中，应该将任务发送到任务队列中处理
-    # 为了简化示例，我们直接模拟分析任务已启动
-    
-    logger.info(f"已创建分析任务: {task_id}, 分析ID: {analysis_id}")
-    
-    # 模拟异步处理，立即更新任务状态为进行中
-    await db.analysis_tasks.update_one(
-        {"task_id": task_id},
-        {"$set": {"status": "IN_PROGRESS", "progress": 10, "updated_at": datetime.utcnow()}}
-    )
-    
-    # 为了演示，我们也更新分析记录状态
-    await db.analysis_records.update_one(
-        {"analysis_id": analysis_id},
-        {"$set": {"status": "IN_PROGRESS", "updated_at": datetime.utcnow()}}
-    )
-    
-    return success_response({
-        "analysis_id": analysis_id,
-        "task_id": task_id,
-        "status": "PENDING",
-        "estimated_completion": (datetime.utcnow() + timedelta(minutes=2)).isoformat()
-    })
+    # 异步触发实际的分析任务
+    # 将任务发送到Celery任务队列中处理
+    try:
+        # 调用Celery任务，并传入analysis_id参数
+        # 这样Celery任务就会使用API创建的analysis_id，而不是生成新的ID
+        celery_task = analyze_performance_task.apply_async(
+            args=[
+                performance_record_id,
+                ai_service_name,
+                request.priority.value
+            ],
+            kwargs={
+                "analysis_id": analysis_id  # 传入analysis_id作为参数
+            }
+        )
+        
+        task_id = celery_task.id
+        # 注意：这里不再重新生成analysis_id，而是使用上面定义的
+        
+        # 创建任务状态记录
+        task_status = {
+            "task_id": task_id,
+            "analysis_id": analysis_id,
+            "status": "PENDING",
+            "progress": 0,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "estimated_completion": datetime.utcnow() + timedelta(minutes=2)
+        }
+        
+        await db.analysis_tasks.insert_one(task_status)
+        
+        # 创建分析记录
+        analysis_record = {
+            "analysis_id": analysis_id,
+            "performance_record_id": performance_record_id,
+            "project_key": performance_record.get("project_key"),
+            "ai_service": ai_service_name,
+            "status": "PENDING",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "results": None,
+            "task_id": task_id,
+            "priority": request.priority.value
+        }
+        
+        await db.ai_analysis_results.insert_one(analysis_record)
+        
+        logger.info(f"已创建分析任务: {task_id}, 分析ID: {analysis_id}")
+        
+        return success_response({
+            "analysis_id": analysis_id,
+            "task_id": task_id,
+            "status": "PENDING",
+            "estimated_completion": (datetime.utcnow() + timedelta(minutes=2)).isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"创建分析任务失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建分析任务失败: {str(e)}")
 
 
 @router.get("/task-status/{task_id}")
@@ -120,73 +119,6 @@ async def get_task_status(
     if not task:
         logger.warning(f"任务不存在: {task_id}")
         raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
-    
-    # 模拟任务进度更新
-    # 在实际实现中，这应该反映真实的任务进度
-    current_time = datetime.utcnow()
-    created_time = task.get("created_at")
-    
-    # 如果任务是PENDING或IN_PROGRESS状态，并且已经过了一定时间，更新其状态
-    if task.get("status") in ["PENDING", "IN_PROGRESS"]:
-        time_diff = (current_time - created_time).total_seconds()
-        
-        # 模拟进度更新
-        new_status = task.get("status")
-        new_progress = task.get("progress", 0)
-        
-        if time_diff > 60:  # 如果已经过了60秒，将任务设为完成
-            new_status = "SUCCESS"
-            new_progress = 100
-        elif time_diff > 30:  # 如果已经过了30秒，更新进度到75%
-            new_progress = 75
-        elif time_diff > 15:  # 如果已经过了15秒，更新进度到50%
-            new_progress = 50
-        elif time_diff > 5:   # 如果已经过了5秒，更新进度到25%
-            new_progress = 25
-        
-        # 更新任务状态
-        if new_status != task.get("status") or new_progress != task.get("progress"):
-            await db.analysis_tasks.update_one(
-                {"task_id": task_id},
-                {"$set": {
-                    "status": new_status, 
-                    "progress": new_progress, 
-                    "updated_at": current_time
-                }}
-            )
-            
-            # 如果任务完成，也更新相应的分析记录
-            if new_status == "SUCCESS":
-                analysis_record = await db.analysis_records.find_one({"task_id": task_id})
-                if analysis_record:
-                    # 生成一些模拟的分析结果
-                    analysis_results = {
-                        "summary": "这是一个演示分析结果，显示应用性能正常。",
-                        "performance_score": 85,
-                        "bottlenecks": [
-                            {
-                                "type": "database",
-                                "description": "数据库查询耗时较长",
-                                "recommendations": ["优化SQL查询", "添加索引"]
-                            }
-                        ],
-                        "recommendations": [
-                            "考虑添加缓存机制",
-                            "优化慢查询"
-                        ]
-                    }
-                    
-                    await db.analysis_records.update_one(
-                        {"analysis_id": analysis_record.get("analysis_id")},
-                        {"$set": {
-                            "status": "COMPLETED", 
-                            "updated_at": current_time,
-                            "results": analysis_results
-                        }}
-                    )
-            
-            # 重新获取更新后的任务
-            task = await db.analysis_tasks.find_one({"task_id": task_id})
     
     # 格式化任务状态为API响应
     result = {
@@ -212,7 +144,7 @@ async def get_analysis_result(
     """获取分析结果"""
     logger.info(f"获取分析结果: {analysis_id}")
     
-    analysis = await db.analysis_records.find_one({"analysis_id": analysis_id})
+    analysis = await db.ai_analysis_results.find_one({"analysis_id": analysis_id})
     if not analysis:
         logger.warning(f"分析记录不存在: {analysis_id}")
         raise HTTPException(status_code=404, detail=f"分析记录不存在: {analysis_id}")
@@ -237,7 +169,7 @@ async def delete_analysis_result(
     logger.info(f"删除分析结果: {analysis_id}")
     
     # 检查分析记录是否存在
-    analysis = await db.analysis_records.find_one({"analysis_id": analysis_id})
+    analysis = await db.ai_analysis_results.find_one({"analysis_id": analysis_id})
     if not analysis:
         logger.warning(f"分析记录不存在: {analysis_id}")
         raise HTTPException(status_code=404, detail=f"分析记录不存在: {analysis_id}")
@@ -249,7 +181,7 @@ async def delete_analysis_result(
         logger.info(f"已删除关联的任务状态记录: {task_id}")
     
     # 删除分析记录
-    result = await db.analysis_records.delete_one({"analysis_id": analysis_id})
+    result = await db.ai_analysis_results.delete_one({"analysis_id": analysis_id})
     
     if result.deleted_count == 0:
         logger.warning(f"删除分析记录失败: {analysis_id}")
@@ -279,11 +211,11 @@ async def get_all_analysis_history(
         query["analysis_type"] = analysis_type
     
     # 计算总数
-    total = await db.analysis_records.count_documents(query)
+    total = await db.ai_analysis_results.count_documents(query)
     
     # 获取分页数据
     skip = (page - 1) * size
-    cursor = db.analysis_records.find(query).sort("created_at", -1).skip(skip).limit(size)
+    cursor = db.ai_analysis_results.find(query).sort("created_at", -1).skip(skip).limit(size)
     
     records = []
     async for record in cursor:
@@ -367,11 +299,11 @@ async def get_project_analysis_history(
             query["created_at"] = date_query
     
     # 计算总数
-    total = await db.analysis_records.count_documents(query)
+    total = await db.ai_analysis_results.count_documents(query)
     
     # 获取分页数据
     skip = (page - 1) * size
-    cursor = db.analysis_records.find(query).sort("created_at", -1).skip(skip).limit(size)
+    cursor = db.ai_analysis_results.find(query).sort("created_at", -1).skip(skip).limit(size)
     
     records = []
     async for record in cursor:

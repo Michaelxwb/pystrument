@@ -29,8 +29,6 @@
           <el-option label="按深度排序" value="depth" />
           <el-option label="按调用顺序" value="order" />
         </el-select>
-        <el-button size="small" @click="expandAll">全部展开</el-button>
-        <el-button size="small" @click="collapseAll">全部折叠</el-button>
       </div>
     </div>
 
@@ -98,16 +96,6 @@
         <div class="tree-header">
           <span>调用链树形视图</span>
           <div class="tree-controls">
-            <el-tooltip content="展开全部节点" placement="top">
-              <el-button size="small" type="primary" plain @click="expandAll">
-                <el-icon><ArrowDown /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="收起全部节点" placement="top">
-              <el-button size="small" type="info" plain @click="collapseAll">
-                <el-icon><ArrowUp /></el-icon>
-              </el-button>
-            </el-tooltip>
             <el-tooltip content="只展开关键节点" placement="top">
               <el-button size="small" type="warning" plain @click="expandSlowNodes">
                 <el-icon><Warning /></el-icon>
@@ -262,6 +250,11 @@ const uniqueFiles = computed(() => {
 })
 
 const totalDuration = computed(() => {
+  // 使用performance_metrics.total_duration字段的值，转为毫秒单位
+  if (props.record && props.record.performance_metrics && props.record.performance_metrics.total_duration !== undefined) {
+    return props.record.performance_metrics.total_duration * 1000
+  }
+  // 回退方案：如果找不到total_duration，则累加所有函数调用的持续时间
   return functionCalls.value.reduce((sum, call) => sum + call.duration, 0) * 1000
 })
 

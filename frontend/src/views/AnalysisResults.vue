@@ -141,9 +141,14 @@
         </el-table-column>
         <el-table-column prop="completedAt" label="完成时间" width="160" sortable>
           <template #default="scope">
-            <el-tooltip :content="formatFullDateTime(scope.row.completedAt)" placement="top">
-              <span>{{ formatDateTime(scope.row.completedAt) || '未完成' }}</span>
-            </el-tooltip>
+            <template v-if="scope.row.status === 'completed' && scope.row.completedAt">
+              <el-tooltip :content="formatFullDateTime(scope.row.completedAt)" placement="top">
+                <span>{{ formatDateTime(scope.row.completedAt) }}</span>
+              </el-tooltip>
+            </template>
+            <template v-else>
+              <span class="text-muted">未完成</span>
+            </template>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -291,17 +296,54 @@ const loadAnalysisResults = async () => {
     // 使用获取所有分析历史的方法
     const response = await analysisApi.getAllAnalysisHistory(params)
     
-    analysisResults.value = response.data.records.map((item: any) => ({
-      id: item._id || item.id,
-      ...item,
-      projectName: item.project_name || item.projectKey || '未知项目',
-      analysisType: item.analysis_type || 'ai_analysis',
-      status: item.status || 'pending',
-      aiService: item.ai_service || 'default',
-      summary: item.summary || item.results?.summary || '',
-      createdAt: item.created_at || '',
-      completedAt: item.completed_at || ''
-    }))
+    analysisResults.value = response.data.records.map((item: any) => {
+      // 状态映射：将后端返回的大写状态转换为前端所需的小写状态
+      // 修复状态映射，确保处理所有可能的后端状态值
+      const statusMap: Record<string, string> = {
+        'PENDING': 'pending',
+        'IN_PROGRESS': 'processing',
+        'COMPLETED': 'completed',
+        'SUCCESS': 'completed', // 添加对SUCCESS状态的处理
+        'FAILURE': 'failed',
+        'CANCELED': 'failed',
+        'FAILED': 'failed' // 添加对FAILED状态的处理
+      };
+      
+      // 确保正确提取analysis_id
+      const analysisId = item.analysis_id || item.id || item._id;
+      
+      // 正确提取摘要信息
+      let summaryText = '';
+      if (item.results) {
+        // 尝试从不同字段获取摘要信息
+        if (item.results.summary) {
+          summaryText = item.results.summary;
+        } else if (item.results.bottleneck_analysis && item.results.bottleneck_analysis.length > 0) {
+          // 如果没有摘要但有瓶颈分析，使用第一个瓶颈分析的描述作为摘要
+          summaryText = `发现${item.results.bottleneck_analysis.length}个性能瓶颈，包括${item.results.bottleneck_analysis[0].type}问题`;
+        } else if (item.results.optimization_suggestions && item.results.optimization_suggestions.length > 0) {
+          // 如果没有摘要但有优化建议，使用第一个优化建议的标题作为摘要
+          summaryText = `提供${item.results.optimization_suggestions.length}个优化建议，包括${item.results.optimization_suggestions[0].title}`;
+        } else if (item.results.performance_score) {
+          // 如果只有性能评分，使用评分作为摘要
+          summaryText = `性能评分: ${item.results.performance_score}分`;
+        }
+      }
+      
+      return {
+        id: analysisId,
+        analysis_id: analysisId,  // 同时保留analysis_id字段
+        ...item,
+        projectName: item.project_name || item.projectKey || '未知项目',
+        analysisType: item.analysis_type || 'ai_analysis',
+        status: statusMap[item.status] || 'pending', // 使用状态映射
+        aiService: item.ai_service || 'default',
+        summary: summaryText || item.summary || '暂无摘要',
+        createdAt: item.created_at || '',
+        // 修复完成时间字段映射，使用updated_at作为completedAt的值
+        completedAt: item.completed_at || item.updated_at || ''
+      };
+    })
     
     pagination.value.total = response.data.total
   } catch (error) {
@@ -389,15 +431,22 @@ const triggerNewAnalysis = () => {
 const viewDetail = async (row: any) => {
   try {
     loading.value = true
-    console.log('查看分析详情:', row.id)
+    // 确保使用正确的分析ID
+    const analysisId = row.analysis_id || row.id || row._id;
+    console.log('查看分析详情:', analysisId)
+    
+    if (!analysisId) {
+      ElMessage.error('分析ID无效')
+      return
+    }
     
     // 获取分析详情数据
-    const response = await analysisApi.getAnalysisResult(row.id)
+    const response = await analysisApi.getAnalysisResult(analysisId)
     
     if (response.data) {
       // 导航到分析详情页面，并传递分析数据
       router.push({
-        path: `/analysis/${row.id}`,
+        path: `/analysis/${analysisId}`,
         query: { 
           from: 'analysis-list',
           projectName: row.projectName 
@@ -417,10 +466,17 @@ const viewDetail = async (row: any) => {
 const downloadReport = async (row: any, format: 'json' | 'pdf' = 'json') => {
   try {
     loading.value = true
-    console.log(`下载${format.toUpperCase()}格式分析报告:`, row.id)
+    // 确保使用正确的分析ID
+    const analysisId = row.analysis_id || row.id || row._id;
+    console.log(`下载${format.toUpperCase()}格式分析报告:`, analysisId)
+    
+    if (!analysisId) {
+      ElMessage.error('分析ID无效')
+      return
+    }
     
     // 获取分析详情数据
-    const response = await analysisApi.getAnalysisResult(row.id)
+    const response = await analysisApi.getAnalysisResult(analysisId)
     console.log('分析结果数据:', response.data);
     
     if (response.data && response.data.results) {
@@ -432,12 +488,12 @@ const downloadReport = async (row: any, format: 'json' | 'pdf' = 'json') => {
             ...response.data,
             results: {
               ...response.data.results,
-              // 确保bottlenecks和recommendations字段是数组
-              bottlenecks: Array.isArray(response.data.results.bottlenecks) 
-                ? response.data.results.bottlenecks 
+              // 确保bottleneck_analysis和optimization_suggestions字段是数组
+              bottleneck_analysis: Array.isArray(response.data.results.bottleneck_analysis) 
+                ? response.data.results.bottleneck_analysis 
                 : [],
-              recommendations: Array.isArray(response.data.results.recommendations) 
-                ? response.data.results.recommendations 
+              optimization_suggestions: Array.isArray(response.data.results.optimization_suggestions) 
+                ? response.data.results.optimization_suggestions 
                 : []
             }
           };
@@ -453,20 +509,17 @@ const downloadReport = async (row: any, format: 'json' | 'pdf' = 'json') => {
         }
       } else {
         // 导出JSON报告逻辑
+        // 使用后端原始字段名称保持一致性
         const reportData = {
           performance_score: response.data.results.performance_score,
-          bottlenecks: response.data.results.bottlenecks,
-          suggestions: response.data.results.recommendations ? response.data.results.recommendations.map((item: string, index: number) => ({
-            priority: index < 1 ? 'high' : index < 3 ? 'medium' : 'low',
-            title: item,
-            description: item,
-            category: 'general'
-          })) : [],
-          risks: {
+          bottleneck_analysis: response.data.results.bottleneck_analysis || [],
+          optimization_suggestions: response.data.results.optimization_suggestions || [],
+          risk_assessment: response.data.results.risk_assessment || {
             current_risks: [],
             potential_issues: [],
             recommendations: []
           },
+          summary: response.data.results.summary || '',
           analysis_time: response.data.created_at
         }
         
@@ -477,7 +530,7 @@ const downloadReport = async (row: any, format: 'json' | 'pdf' = 'json') => {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `分析报告_${row.projectName || row.projectKey}_${row.id.substring(0, 8)}.json`
+        a.download = `分析报告_${row.projectName || row.projectKey}_${analysisId.substring(0, 8)}.json`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -513,11 +566,19 @@ const deleteAnalysis = async (row: any) => {
     )
     
     loading.value = true
-    console.log('删除分析结果:', row.id)
+    // 确保使用正确的分析ID
+    const analysisId = row.analysis_id || row.id || row._id;
+    console.log('删除分析结果:', analysisId)
+    
+    if (!analysisId) {
+      ElMessage.error('分析ID无效')
+      loading.value = false
+      return
+    }
     
     try {
       // 调用删除API
-      await http.delete(`/v1/analysis/result/${row.id}`)
+      await http.delete(`/v1/analysis/result/${analysisId}`)
       
       ElMessage.success('删除成功')
       
@@ -532,6 +593,7 @@ const deleteAnalysis = async (row: any) => {
   } catch {
     // 用户取消删除
     console.log('用户取消删除操作')
+    loading.value = false
   }
 }
 

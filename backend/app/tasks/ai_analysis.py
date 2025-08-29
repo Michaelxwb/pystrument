@@ -3,14 +3,14 @@ Celery异步任务
 """
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from celery import Celery
 from app.config.settings import settings
 from app.services.ai_analyzer import performance_analyzer
-from app.services.database import db_manager
-from app.models.analysis import AnalysisRecord
+from app.utils.database import db_manager, init_database
+from app.models.analysis import AnalysisRecord, AnalysisStatus, AnalysisPriority
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,24 @@ celery_app.conf.update(
 )
 
 
+# 初始化数据库连接
+async def initialize_database():
+    """初始化数据库连接"""
+    try:
+        await init_database()
+        logger.info("数据库连接初始化成功")
+    except Exception as e:
+        logger.error(f"数据库连接初始化失败: {str(e)}")
+        raise
+
+
 @celery_app.task(bind=True, name='ai_analysis.analyze_performance')
 def analyze_performance_task(
     self,
     performance_record_id: str,
     ai_service: Optional[str] = None,
-    priority: str = 'normal'
+    priority: str = 'normal',
+    analysis_id: Optional[str] = None  # 新增参数，接受API传入的analysis_id
 ):
     """
     异步分析性能数据
@@ -50,8 +62,18 @@ def analyze_performance_task(
         performance_record_id: 性能记录ID
         ai_service: AI服务名称
         priority: 分析优先级
+        analysis_id: 分析ID（可选，由API传入）
     """
+    # 初始化事件循环
+    loop = None
     try:
+        logger.info(f"开始执行性能分析任务: {performance_record_id}, AI服务: {ai_service}, 优先级: {priority}")
+        
+        # 初始化数据库连接
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(initialize_database())
+        
         # 更新任务状态
         self.update_state(
             state='PROGRESS',
@@ -59,7 +81,7 @@ def analyze_performance_task(
         )
         
         # 获取性能记录
-        performance_record = asyncio.run(
+        performance_record = loop.run_until_complete(
             db_manager.get_performance_record(performance_record_id)
         )
         
@@ -73,7 +95,7 @@ def analyze_performance_task(
         )
         
         # 执行AI分析
-        analysis_results = asyncio.run(
+        analysis_results = loop.run_until_complete(
             performance_analyzer.analyze_performance(
                 performance_record,
                 ai_service=ai_service
@@ -86,22 +108,44 @@ def analyze_performance_task(
             meta={'step': 'saving_results', 'progress': 80}
         )
         
-        # 保存分析结果
-        analysis_record = AnalysisRecord(
-            id=f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}",
-            performance_record_id=performance_record_id,
-            project_key=performance_record.get("project_key"),
-            analysis_type="ai_analysis",
-            ai_service=ai_service or "fallback",
-            results=analysis_results.dict(),
-            task_id=self.request.id,
-            status="completed",
-            created_at=datetime.utcnow(),
-            completed_at=datetime.utcnow()
-        )
+        # 使用传入的analysis_id，如果不为空的话
+        final_analysis_id = analysis_id or f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}"
         
-        # 保存到数据库
-        asyncio.run(db_manager.save_analysis_record(analysis_record))
+        # 检查是否已存在分析记录
+        existing_record = None
+        if analysis_id:
+            existing_record = loop.run_until_complete(
+                db_manager.get_analysis_record_by_id(analysis_id)
+            )
+        
+        if existing_record:
+            # 更新现有记录
+            logger.info(f"更新分析记录: {analysis_id}")
+            existing_record.results = analysis_results
+            existing_record.status = AnalysisStatus.SUCCESS
+            existing_record.updated_at = datetime.utcnow()
+            
+            # 保存到数据库
+            loop.run_until_complete(db_manager.save_analysis_record(existing_record))
+            
+            analysis_record = existing_record
+        else:
+            # 创建新记录
+            analysis_record = AnalysisRecord(
+                analysis_id=final_analysis_id,
+                performance_record_id=performance_record_id,
+                project_key=performance_record.get("project_key", "unknown"),
+                ai_service=ai_service or "fallback",
+                results=analysis_results,
+                task_id=self.request.id,
+                status=AnalysisStatus.SUCCESS,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                priority=AnalysisPriority(priority)
+            )
+            
+            # 保存到数据库
+            loop.run_until_complete(db_manager.save_analysis_record(analysis_record))
         
         # 更新任务状态
         self.update_state(
@@ -109,14 +153,24 @@ def analyze_performance_task(
             meta={
                 'step': 'completed',
                 'progress': 100,
-                'analysis_id': analysis_record.id,
+                'analysis_id': analysis_record.analysis_id,
                 'performance_score': analysis_results.performance_score
             }
         )
         
+        # 更新任务状态记录
+        loop.run_until_complete(
+            db_manager.update_task_status(
+                self.request.id,
+                "SUCCESS",
+                100,
+                datetime.utcnow()
+            )
+        )
+        
         return {
             'status': 'success',
-            'analysis_id': analysis_record.id,
+            'analysis_id': analysis_record.analysis_id,
             'performance_score': analysis_results.performance_score,
             'bottleneck_count': len(analysis_results.bottleneck_analysis),
             'suggestion_count': len(analysis_results.optimization_suggestions)
@@ -137,24 +191,34 @@ def analyze_performance_task(
         
         # 保存失败记录
         try:
-            analysis_record = AnalysisRecord(
-                id=f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}",
-                performance_record_id=performance_record_id,
-                project_key="unknown",
-                analysis_type="ai_analysis",
-                ai_service=ai_service or "fallback",
-                results={},
-                task_id=self.request.id,
-                status="failed",
-                error_message=str(e),
-                created_at=datetime.utcnow(),
-                completed_at=datetime.utcnow()
-            )
-            asyncio.run(db_manager.save_analysis_record(analysis_record))
-        except:
-            pass
+            if loop:
+                # 使用传入的analysis_id，如果不为空的话
+                final_analysis_id = analysis_id or f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}"
+                
+                analysis_record = AnalysisRecord(
+                    analysis_id=final_analysis_id,
+                    performance_record_id=performance_record_id,
+                    project_key="unknown",
+                    ai_service=ai_service or "fallback",
+                    results=None,
+                    task_id=self.request.id,
+                    status=AnalysisStatus.FAILURE,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                    priority=AnalysisPriority(priority)
+                )
+                loop.run_until_complete(db_manager.save_analysis_record(analysis_record))
+        except Exception as inner_e:
+            logger.error(f"保存失败记录时出错: {str(inner_e)}")
         
         raise
+    finally:
+        # 关闭事件循环
+        if loop:
+            try:
+                loop.close()
+            except Exception as e:
+                logger.error(f"关闭事件循环时出错: {str(e)}")
 
 
 @celery_app.task(name='ai_analysis.batch_analyze_performance')
@@ -341,9 +405,16 @@ def generate_performance_report_task(
         raise
 
 
+# 从修复版中导入任务
+try:
+    from app.tasks.ai_analysis_fix import analyze_performance_fixed_task
+except ImportError:
+    logger.warning("无法导入修复版分析任务")
+
 # 任务路由配置
 celery_app.conf.task_routes = {
     'ai_analysis.analyze_performance': {'queue': 'analysis'},
+    'ai_analysis.analyze_performance_fixed': {'queue': 'analysis'},
     'ai_analysis.batch_analyze_performance': {'queue': 'batch'},
     'ai_analysis.cleanup_old_analysis': {'queue': 'maintenance'},
     'ai_analysis.performance_report': {'queue': 'reports'},

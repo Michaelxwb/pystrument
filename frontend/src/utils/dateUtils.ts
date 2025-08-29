@@ -35,7 +35,7 @@ export const toBeijingTime = (dateString?: string): Date => {
 }
 
 /**
- * 格式化日期时间为简短格式（月/日 时:分）
+ * 格式化日期时间为简短格式（年-月-日 时:分:秒）
  * @param dateString 日期字符串
  * @returns 格式化后的字符串
  */
@@ -45,10 +45,12 @@ export const formatDateTime = (dateString?: string): string => {
   try {
     const beijingTime = toBeijingTime(dateString);
     return beijingTime.toLocaleString('zh-CN', {
+      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
       hour12: false
     });
   } catch (error) {

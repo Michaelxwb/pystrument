@@ -41,8 +41,13 @@ export interface RiskAssessment {
 export interface AnalysisResults {
   summary: string
   performance_score: number
-  bottlenecks: BottleneckAnalysis[]
-  recommendations: string[]
+  bottlenecks: BottleneckAnalysis[] // 前端使用bottlenecks，对应后端的bottleneck_analysis
+  recommendations: string[] // 前端使用recommendations，对应后端的optimization_suggestions的title
+  
+  // 添加直接对应后端的字段，以便兼容处理
+  bottleneck_analysis?: BottleneckAnalysis[]
+  optimization_suggestions?: OptimizationSuggestion[]
+  risk_assessment?: RiskAssessment
   details?: Record<string, any>
 }
 
@@ -53,7 +58,7 @@ export interface AnalysisRecord {
   ai_service: string
   results?: AnalysisResults
   task_id: string
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILURE' | 'CANCELED'
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SUCCESS' | 'FAILURE' | 'CANCELED'
   created_at: string
   updated_at: string
   priority: 'high' | 'normal' | 'low'

@@ -19,6 +19,7 @@ class AIProvider(Enum):
     CUSTOM = "custom"
     AZURE_OPENAI = "azure_openai"
     HUGGINGFACE = "huggingface"
+    ALIYUN_QIANWEN = "aliyun_qianwen"
 
 
 @dataclass
@@ -52,6 +53,9 @@ class AIConfigManager:
     """AI配置管理器"""
     
     def __init__(self, config_file: Optional[str] = None):
+        # 加载环境变量
+        self._load_env_vars()
+        
         self.config_file = config_file or "ai_config.yaml"
         self.services: Dict[str, AIServiceConfig] = {}
         self.default_service: str = "openai"
@@ -59,13 +63,24 @@ class AIConfigManager:
         
         self._load_config()
     
+    def _load_env_vars(self):
+        """加载环境变量"""
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            logger.info("环境变量加载成功")
+        except ImportError:
+            logger.warning("python-dotenv未安装，跳过环境变量加载")
+        except Exception as e:
+            logger.error(f"加载环境变量失败: {str(e)}")
+    
     def _load_config(self):
         """加载配置"""
         try:
             # 从环境变量加载
             self._load_from_env()
             
-            # 从配置文件加载
+            # 从配置文件加载（会覆盖环境变量中的同名配置）
             if os.path.exists(self.config_file):
                 self._load_from_file()
             else:
@@ -82,6 +97,7 @@ class AIConfigManager:
         if openai_key:
             self.services["openai"] = AIServiceConfig(
                 provider=AIProvider.OPENAI,
+                enabled=True,
                 api_key=openai_key,
                 endpoint=os.getenv("OPENAI_ENDPOINT", "https://api.openai.com/v1/chat/completions"),
                 model=os.getenv("OPENAI_MODEL", "gpt-4"),
@@ -94,6 +110,7 @@ class AIConfigManager:
         if azure_key:
             self.services["azure_openai"] = AIServiceConfig(
                 provider=AIProvider.AZURE_OPENAI,
+                enabled=True,
                 api_key=azure_key,
                 endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4"),
@@ -102,11 +119,29 @@ class AIConfigManager:
                 }
             )
         
+        # 阿里千问配置
+        aliyun_key = os.getenv("ALIYUN_QIANWEN_API_KEY")
+        if aliyun_key:
+            self.services["aliyun_qianwen"] = AIServiceConfig(
+                provider=AIProvider.ALIYUN_QIANWEN,
+                enabled=True,
+                api_key=aliyun_key,
+                endpoint=os.getenv("ALIYUN_QIANWEN_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"),
+                model=os.getenv("ALIYUN_QIANWEN_MODEL", "qwen-turbo"),
+                max_tokens=int(os.getenv("ALIYUN_QIANWEN_MAX_TOKENS", "2000")),
+                temperature=float(os.getenv("ALIYUN_QIANWEN_TEMPERATURE", "0.7")),
+                headers={
+                    "Authorization": f"Bearer {aliyun_key}",
+                    "Content-Type": "application/json"
+                }
+            )
+        
         # 自定义AI服务配置
         custom_endpoint = os.getenv("CUSTOM_AI_ENDPOINT")
         if custom_endpoint:
             self.services["custom"] = AIServiceConfig(
                 provider=AIProvider.CUSTOM,
+                enabled=True,
                 endpoint=custom_endpoint,
                 api_key=os.getenv("CUSTOM_AI_TOKEN"),
                 model=os.getenv("CUSTOM_AI_MODEL", "custom-model"),
@@ -132,16 +167,53 @@ class AIConfigManager:
             for service_name, service_config in ai_services.items():
                 provider = AIProvider(service_config.get("provider", "custom"))
                 
+                # 处理API密钥中的环境变量替换
+                api_key = service_config.get("api_key")
+                if isinstance(api_key, str) and api_key.startswith("${") and api_key.endswith("}"):
+                    env_var_name = api_key[2:-1]
+                    api_key = os.getenv(env_var_name, api_key)
+                
+                # 处理headers中的环境变量替换
+                headers = service_config.get("headers", {})
+                processed_headers = {}
+                for header_name, header_value in headers.items():
+                    if isinstance(header_value, str):
+                        # 处理完整的环境变量替换 ${VAR_NAME}
+                        if header_value.startswith("${") and header_value.endswith("}"):
+                            env_var_name = header_value[2:-1]
+                            actual_value = os.getenv(env_var_name, header_value)
+                            processed_headers[header_name] = actual_value
+                            logger.debug(f"完整替换环境变量 {env_var_name} -> {actual_value}")
+                        # 处理包含环境变量的字符串 Bearer ${VAR_NAME}
+                        elif "${" in header_value and "}" in header_value:
+                            # 查找所有环境变量占位符
+                            import re
+                            pattern = r'\$\{([^}]+)\}'
+                            matches = re.findall(pattern, header_value)
+                            processed_value = header_value
+                            for env_var_name in matches:
+                                env_value = os.getenv(env_var_name, f"${{{env_var_name}}}")
+                                processed_value = processed_value.replace(f"${{{env_var_name}}}", env_value)
+                                logger.debug(f"部分替换环境变量 {env_var_name} -> {env_value}")
+                            processed_headers[header_name] = processed_value
+                        else:
+                            processed_headers[header_name] = header_value
+                    else:
+                        processed_headers[header_name] = header_value
+                
+                # 记录处理后的headers用于调试
+                logger.debug(f"服务 {service_name} 处理后的headers: {processed_headers}")
+                
                 self.services[service_name] = AIServiceConfig(
                     provider=provider,
                     enabled=service_config.get("enabled", True),
                     model=service_config.get("model", "gpt-4"),
-                    api_key=service_config.get("api_key"),
+                    api_key=api_key,
                     endpoint=service_config.get("endpoint"),
                     timeout=service_config.get("timeout", 30),
                     max_tokens=service_config.get("max_tokens", 4000),
                     temperature=service_config.get("temperature", 0.3),
-                    headers=service_config.get("headers", {}),
+                    headers=processed_headers,
                     params=service_config.get("params", {}),
                     max_retries=service_config.get("max_retries", 3),
                     retry_delay=service_config.get("retry_delay", 1.0),

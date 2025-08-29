@@ -28,11 +28,23 @@ export async function generateAnalysisReportPDF(analysisRecord: AnalysisRecord, 
     };
   }
   
-  const results = analysisRecord.results
+  // 适配后端数据结构
+  const adaptedResults: AnalysisResults = {
+    summary: analysisRecord.results.summary || '',
+    performance_score: analysisRecord.results.performance_score || 0,
+    bottlenecks: analysisRecord.results.bottleneck_analysis || [],
+    recommendations: []
+  };
+  
+  // 从optimization_suggestions中提取建议
+  if (analysisRecord.results.optimization_suggestions && Array.isArray(analysisRecord.results.optimization_suggestions)) {
+    adaptedResults.recommendations = analysisRecord.results.optimization_suggestions.map(suggestion => suggestion.title || suggestion.description || '');
+  }
+  
   const reportFilename = `分析报告_${projectName || analysisRecord.project_key || '未知项目'}_${(analysisRecord.analysis_id || 'unknown').substring(0, 8)}`
   
   // 创建报告HTML内容
-  const reportContent = createReportHTML(analysisRecord, projectName, results)
+  const reportContent = createReportHTML(analysisRecord, projectName, adaptedResults)
   
   // 打开新窗口并写入报告内容
   const reportWindow = window.open('', '_blank');

@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 
-from app.services.ai_config import ai_config_manager, AIProvider
+from app.services.ai_config import ai_config_manager, AIProvider, AIServiceConfig
 from app.models.analysis import AnalysisResults, BottleneckAnalysis, OptimizationSuggestion, RiskAssessment
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,8 @@ class PerformanceAnalyzer:
             # 调用对应的AI服务
             if service_config.provider == AIProvider.OPENAI:
                 return await self._analyze_with_openai(processed_data, service_config)
+            elif service_config.provider == AIProvider.ALIYUN_QIANWEN:
+                return await self._analyze_with_qianwen(processed_data, service_config)
             elif service_config.provider == AIProvider.CUSTOM:
                 return await self._analyze_with_custom_ai(processed_data, service_config)
             else:
@@ -295,7 +297,132 @@ class PerformanceAnalyzer:
         except Exception as e:
             logger.error(f"自定义AI分析失败: {str(e)}")
             return await self._analyze_with_fallback(processed_data)
-    
+
+    async def _analyze_with_qianwen(self, processed_data: Dict[str, Any], service_config: AIServiceConfig) -> AnalysisResults:
+        """使用阿里千问进行分析"""
+        try:
+            import httpx
+            import json
+            from tenacity import retry, stop_after_attempt, wait_exponential
+            
+            # 构建提示语
+            prompt = self._build_analysis_prompt(processed_data)
+            
+            # 准备请求体
+            request_data = {
+                "model": service_config.model,
+                "input": {
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "你是一个专业的性能分析师，专注于Python Web应用的性能分析与优化。请分析用户提供的性能数据，并提供结构化的分析结果。"
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                },
+                "parameters": {
+                    "max_tokens": service_config.max_tokens,
+                    "temperature": service_config.temperature,
+                    "result_format": "json"
+                }
+            }
+            
+            # 防止网络问题，使用 tenacity 进行重试
+            @retry(stop=stop_after_attempt(service_config.max_retries), 
+                  wait=wait_exponential(multiplier=1, min=1, max=10))
+            async def call_qianwen_api():
+                async with httpx.AsyncClient(timeout=service_config.timeout) as client:
+                    response = await client.post(
+                        service_config.endpoint,
+                        json=request_data,
+                        headers=service_config.headers
+                    )
+                    response.raise_for_status()
+                    return response.json()
+        
+            # 调用API
+            logger.info(f"调用阿里千问 API: {service_config.endpoint}")
+            api_response = await call_qianwen_api()
+            
+            # 处理响应
+            content = None
+            # 首先尝试从output.choices获取内容（OpenAI格式）
+            if 'output' in api_response and 'choices' in api_response['output']:
+                content = api_response['output']['choices'][0]['message']['content']
+            # 然后尝试从output.text获取内容（阿里千问格式）
+            elif 'output' in api_response and 'text' in api_response['output']:
+                content = api_response['output']['text']
+            
+            if content:
+                # 尝试解析JSON结构
+                try:
+                    # 处理不同的JSON格式
+                    if content.startswith('```json') and content.endswith('```'):
+                        # 从代码块中提取 JSON
+                        json_str = content.replace('```json', '').replace('```', '').strip()
+                        result_json = json.loads(json_str)
+                    elif content.strip().startswith('{') and content.strip().endswith('}'):
+                        # 直接是JSON对象
+                        result_json = json.loads(content.strip())
+                    else:
+                        # 尝试直接解析
+                        result_json = json.loads(content)
+                    
+                    # 解析完整的分析结果
+                    performance_score = float(result_json.get('performance_score', 70))
+                    
+                    # 解析瓶颈分析
+                    bottlenecks = []
+                    for bottleneck in result_json.get('bottlenecks', []):
+                        bottlenecks.append(BottleneckAnalysis(
+                            type=bottleneck.get('type', 'unknown'),
+                            severity=bottleneck.get('severity', 'medium'),
+                            function=bottleneck.get('function', 'system'),
+                            description=bottleneck.get('description', ''),
+                            impact=float(bottleneck.get('impact', 0.5)) if isinstance(bottleneck.get('impact'), (int, float)) else 0.5
+                        ))
+                    
+                    # 解析优化建议
+                    suggestions = []
+                    for suggestion in result_json.get('suggestions', []):
+                        suggestions.append(OptimizationSuggestion(
+                            category=suggestion.get('category', 'performance'),
+                            priority=suggestion.get('priority', 'medium'),
+                            title=suggestion.get('title', ''),
+                            description=suggestion.get('description', ''),
+                            code_example=suggestion.get('code_example', ''),
+                            expected_improvement=suggestion.get('expected_improvement', '')
+                        ))
+                    
+                    # 解析风险评估
+                    risks = RiskAssessment(
+                        current_risks=result_json.get('risks', {}).get('current_risks', []),
+                        potential_issues=result_json.get('risks', {}).get('potential_issues', []),
+                        recommendations=result_json.get('risks', {}).get('recommendations', [])
+                    )
+                    
+                    return AnalysisResults(
+                        performance_score=performance_score,
+                        bottleneck_analysis=bottlenecks,
+                        optimization_suggestions=suggestions,
+                        risk_assessment=risks
+                    )
+                except json.JSONDecodeError:
+                    # 结果不是JSON格式，采用文本解析
+                    logger.warning("千问响应不是JSON格式，尝试用文本解析")
+                    return self._parse_text_result(content, processed_data)
+            
+            # 处理异常情况
+            logger.error(f"千问响应格式异常: {api_response}")
+            return await self._analyze_with_fallback(processed_data)
+            
+        except Exception as e:
+            logger.error(f"使用阿里千问分析失败: {str(e)}")
+            return await self._analyze_with_fallback(processed_data)
+
     async def _analyze_with_fallback(self, data: Dict[str, Any]) -> AnalysisResults:
         """基于规则的回退分析"""
         try:
@@ -486,19 +613,19 @@ class PerformanceAnalyzer:
             recommendations=recommendations
         )
     
-    def _parse_ai_result(self, ai_result: Dict[str, Any], processed_data: Dict[str, Any]) -> AnalysisResults:
+    async def _parse_ai_result(self, ai_result: Dict[str, Any], processed_data: Dict[str, Any]) -> AnalysisResults:
         """解析AI结构化结果"""
         # 这里需要根据实际的AI响应格式进行解析
         # 当前返回回退分析
         return await self._analyze_with_fallback(processed_data)
     
-    def _parse_text_result(self, ai_text: str, processed_data: Dict[str, Any]) -> AnalysisResults:
+    async def _parse_text_result(self, ai_text: str, processed_data: Dict[str, Any]) -> AnalysisResults:
         """解析AI文本结果"""
         # 这里可以实现文本解析逻辑
         # 当前返回回退分析
         return await self._analyze_with_fallback(processed_data)
     
-    def _parse_custom_ai_result(self, ai_result: Dict[str, Any], processed_data: Dict[str, Any]) -> AnalysisResults:
+    async def _parse_custom_ai_result(self, ai_result: Dict[str, Any], processed_data: Dict[str, Any]) -> AnalysisResults:
         """解析自定义AI结果"""
         # 这里需要根据自定义AI的响应格式进行解析
         # 当前返回回退分析

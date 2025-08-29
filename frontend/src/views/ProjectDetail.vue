@@ -116,6 +116,9 @@
                 <el-button type="primary" size="small" @click="viewDetail(scope.row)" circle>
                   <el-icon><View /></el-icon>
                 </el-button>
+                <el-button type="warning" size="small" @click="viewCallTrace(scope.row)" circle style="margin-left: 5px;">
+                  <el-icon><Connection /></el-icon>
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -215,6 +218,47 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 性能详情对话框 -->
+    <el-dialog
+      v-model="showDetailsDialog"
+      title="性能详情"
+      width="80%"
+      top="5vh"
+    >
+      <div v-if="showDetailsDialog" class="detail-loading-container">
+        <el-skeleton v-if="detailLoading" :rows="10" animated />
+        <performance-details
+          v-else-if="detailRecord"
+          :record="detailRecord"
+          @close="showDetailsDialog = false"
+        />
+        <div v-else class="no-data">
+          <el-empty description="无法加载详情数据" />
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 调用链对话框 -->
+    <el-dialog
+      v-model="showCallTraceDialog"
+      title="函数调用链"
+      width="90%"
+      top="5vh"
+    >
+      <div v-if="showCallTraceDialog" class="detail-loading-container">
+        <el-skeleton v-if="detailLoading" :rows="10" animated />
+        <div v-else-if="detailRecord && detailRecord.function_calls && detailRecord.function_calls.length > 0">
+          <call-trace-viewer
+            :record="detailRecord"
+            @close="showCallTraceDialog = false"
+          />
+        </div>
+        <div v-else class="no-data">
+          <el-empty description="该记录没有函数调用数据或数据格式不正确" />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -234,13 +278,16 @@ import {
   CircleClose, 
   Setting,
   View,
-  ArrowRight
+  ArrowRight,
+  Connection
 } from '@element-plus/icons-vue'
 import { projectApi } from '@/api/project'
 import { performanceApi } from '@/api/performance'
 import type { Project } from '@/types/project'
 import type { PerformanceRecord } from '@/types/performance'
 import { formatDateTime, formatFullDateTime } from '@/utils/dateUtils'
+import PerformanceDetails from '@/components/PerformanceDetails.vue'
+import CallTraceViewer from '@/components/CallTraceViewer.vue'
 
 // 定义组件名称
 defineOptions({
@@ -261,6 +308,13 @@ const loading = ref(false)
 const statsLoading = ref(false)
 const recordsLoading = ref(false)
 const configSaving = ref(false)
+
+// 弹窗相关数据
+const showDetailsDialog = ref(false)
+const showCallTraceDialog = ref(false)
+const detailRecord = ref<PerformanceRecord | null>(null)
+const detailLoading = ref(false)
+const selectedRecord = ref<any>(null)
 
 const project = ref<Partial<Project>>({
   name: '',
@@ -476,10 +530,42 @@ const getDurationTooltip = (duration: number) => {
   return '响应时间很快'
 }
 
+// 查看性能详情（改为弹窗展示）
+const viewDetail = async (record: any) => {
+  // 保存选中记录，并显示详情对话框
+  selectedRecord.value = record
+  showDetailsDialog.value = true
+  detailLoading.value = true
+  
+  try {
+    // 使用 trace_id 获取完整详情
+    const response = await performanceApi.getRecordDetail(record.trace_id)
+    detailRecord.value = response.data
+  } catch (error) {
+    console.error('获取性能记录详情失败:', error)
+    ElMessage.error('获取性能记录详情失败')
+  } finally {
+    detailLoading.value = false
+  }
+}
 
-
-const viewDetail = (record: any) => {
-  router.push(`/performance/${record.trace_id}`)
+// 查看调用链（新增功能）
+const viewCallTrace = async (record: any) => {
+  // 保存选中记录，并显示调用链对话框
+  selectedRecord.value = record
+  showCallTraceDialog.value = true
+  detailLoading.value = true
+  
+  try {
+    // 使用 trace_id 获取完整详情
+    const response = await performanceApi.getRecordDetail(record.trace_id)
+    detailRecord.value = response.data
+  } catch (error) {
+    console.error('获取性能记录详情失败:', error)
+    ElMessage.error('获取性能记录详情失败')
+  } finally {
+    detailLoading.value = false
+  }
 }
 </script>
 
@@ -643,6 +729,10 @@ const viewDetail = (record: any) => {
   .text-muted {
     color: #909399;
     font-style: italic;
+  }
+  
+  .detail-loading-container {
+    min-height: 300px;
   }
 }
 </style>
