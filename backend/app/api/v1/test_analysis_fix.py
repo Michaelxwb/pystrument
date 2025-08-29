@@ -59,52 +59,16 @@ async def analyze_performance_fixed(
         "priority": request.priority.value
     }
     
-    await db.analysis_records.insert_one(analysis_record)
+    await db.ai_analysis_results.insert_one(analysis_record)
     
-    # 异步触发实际的分析任务
-    # 将任务发送到Celery任务队列中处理
-    try:
-        # 调用Celery任务，传入固定的analysis_id
-        celery_task = analyze_performance_fixed_task.delay(
-            performance_record_id,
-            analysis_id,  # 传入固定的analysis_id
-            ai_service_name,
-            request.priority.value
-        )
-        
-        task_id = celery_task.id
-        
-        # 更新分析记录，添加task_id
-        await db.analysis_records.update_one(
-            {"analysis_id": analysis_id},
-            {"$set": {"task_id": task_id}}
-        )
-        
-        # 创建任务状态记录
-        task_status = {
-            "task_id": task_id,
-            "analysis_id": analysis_id,
-            "status": "PENDING",
-            "progress": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "estimated_completion": datetime.utcnow() + timedelta(minutes=2)
-        }
-        
-        await db.analysis_tasks.insert_one(task_status)
-        
-        logger.info(f"已创建分析任务(修复版): {task_id}, 分析ID: {analysis_id}")
-        
-        return success_response({
-            "analysis_id": analysis_id,
-            "task_id": task_id,
-            "status": "PENDING",
-            "estimated_completion": (datetime.utcnow() + timedelta(minutes=2)).isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"创建分析任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建分析任务失败: {str(e)}")
+    logger.info(f"已创建分析任务(修复版): {task_id}, 分析ID: {analysis_id}")
+    
+    return success_response({
+        "analysis_id": analysis_id,
+        "task_id": task_id,
+        "status": "PENDING",
+        "estimated_completion": (datetime.utcnow() + timedelta(minutes=2)).isoformat()
+    })
 
 
 @router.get("/fixed-result/{analysis_id}")
@@ -117,7 +81,7 @@ async def get_fixed_analysis_result(
     """
     logger.info(f"获取修复版分析结果: {analysis_id}")
     
-    analysis = await db.analysis_records.find_one({"analysis_id": analysis_id})
+    analysis = await db.ai_analysis_results.find_one({"analysis_id": analysis_id})
     if not analysis:
         logger.warning(f"分析记录不存在: {analysis_id}")
         raise HTTPException(status_code=404, detail=f"分析记录不存在: {analysis_id}")

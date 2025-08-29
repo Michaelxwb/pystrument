@@ -253,41 +253,7 @@
         </div>
         
         <!-- 操作日志 -->
-        <div class="logs-section">
-          <h3 class="section-title">操作日志 <el-tooltip content="最近的系统操作记录" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
-          <el-card v-loading="logsLoading" shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <div class="card-title">
-                  <el-icon><Document /></el-icon>
-                  <span>最近操作</span>
-                  <el-tooltip content="每30秒自动刷新" placement="top">
-                    <el-tag size="small" type="info" style="margin-left: 5px;">实时</el-tag>
-                  </el-tooltip>
-                </div>
-                <div class="card-actions">
-                  <el-button type="text" @click="refreshLogs">
-                    <el-icon><Refresh /></el-icon>
-                    刷新
-                  </el-button>
-                </div>
-              </div>
-            </template>
-            <div class="operation-logs">
-              <div v-if="operationLogs.length === 0" class="no-data">
-                <el-empty description="暂无操作日志" :image-size="60" />
-              </div>
-              <div v-else v-for="log in operationLogs" :key="log.id" class="log-item">
-                <div class="log-header">
-                  <div class="log-time">{{ formatDateTime(log.timestamp) }}</div>
-                  <el-tag size="small" :type="getActionType(log.action)">{{ getActionText(log.action) }}</el-tag>
-                </div>
-                <div class="log-content">{{ log.details }}</div>
-                <div class="log-operator">操作人: {{ log.operator }}</div>
-              </div>
-            </div>
-          </el-card>
-        </div>
+        <!-- 已移除操作日志展示，因为不再存储操作日志 -->
       </el-col>
     </el-row>
     
@@ -430,7 +396,7 @@ import {
   ArrowDown
 } from '@element-plus/icons-vue'
 import { settingsApi } from '@/api/settings'
-import type { SystemSettings, SystemStatus, OperationLog } from '@/api/settings'
+import type { SystemSettings, SystemStatus } from '@/api/settings'
 import { formatDateTime } from '@/utils/dateUtils'
 
 // 定义组件名称
@@ -477,14 +443,10 @@ const systemStatus = ref<SystemStatus>({
   storage: { used: 0, total: 0, unit: 'MB' }
 })
 
-// 操作日志
-const operationLogs = ref<OperationLog[]>([])
-
 // 加载状态
 const loading = ref(false)
 const saving = ref(false)
 const statusLoading = ref(false)
-const logsLoading = ref(false)
 const testing = ref(false)
 const clearing = ref(false)
 const exporting = ref(false)
@@ -496,15 +458,13 @@ const importFile = ref<File | null>(null)
 
 // 定时器
 const statusTimer = ref<number | null>(null)
-const logsTimer = ref<number | null>(null)
 const autoRefreshInterval = 30000 // 30秒自动刷新
 
 // 初始化
 onMounted(async () => {
   await Promise.all([
     loadSettings(),
-    loadSystemStatus(),
-    loadOperationLogs()
+    loadSystemStatus()
   ])
   
   // 启动自动刷新
@@ -527,12 +487,6 @@ const startAutoRefresh = () => {
       loadSystemStatus()
     }
   }, autoRefreshInterval)
-  
-  logsTimer.value = window.setInterval(() => {
-    if (!logsLoading.value) {
-      loadOperationLogs()
-    }
-  }, autoRefreshInterval)
 }
 
 // 清除自动刷新定时器
@@ -540,11 +494,6 @@ const clearAutoRefresh = () => {
   if (statusTimer.value) {
     clearInterval(statusTimer.value)
     statusTimer.value = null
-  }
-  
-  if (logsTimer.value) {
-    clearInterval(logsTimer.value)
-    logsTimer.value = null
   }
 }
 
@@ -587,8 +536,6 @@ const saveSettings = async () => {
     
     if (response.data.success) {
       ElMessage.success('设置保存成功')
-      // 重新加载操作日志
-      await loadOperationLogs()
     } else {
       ElMessage.error('设置保存失败')
     }
@@ -664,37 +611,16 @@ const loadSystemStatus = async () => {
   }
 }
 
-// 加载操作日志
-const loadOperationLogs = async () => {
-  logsLoading.value = true
-  try {
-    const response = await settingsApi.getOperationLogs()
-    operationLogs.value = response.data.logs || []
-    console.log('加载操作日志成功:', operationLogs.value)
-  } catch (error) {
-    console.error('加载操作日志失败:', error)
-    ElMessage.error('加载操作日志失败')
-  } finally {
-    logsLoading.value = false
-  }
-}
-
 // 刷新状态
 const refreshStatus = () => {
   loadSystemStatus()
-}
-
-// 刷新日志
-const refreshLogs = () => {
-  loadOperationLogs()
 }
 
 // 刷新所有数据
 const refreshAll = () => {
   Promise.all([
     loadSettings(),
-    loadSystemStatus(),
-    loadOperationLogs()
+    loadSystemStatus()
   ]).then(() => {
     ElMessage.success('数据刷新成功')
   })
@@ -799,8 +725,6 @@ const clearCache = async () => {
     
     if (response.data.success) {
       ElMessage.success(response.data.message || '缓存清理成功')
-      // 更新操作日志
-      await loadOperationLogs()
     } else {
       ElMessage.error(response.data.message || '缓存清理失败')
     }
@@ -830,9 +754,6 @@ const exportConfig = async () => {
     URL.revokeObjectURL(url)
     
     ElMessage.success('配置导出成功')
-    
-    // 更新操作日志
-    await loadOperationLogs()
   } catch (error) {
     console.error('导出配置失败:', error)
     ElMessage.error('导出配置失败')
@@ -867,11 +788,8 @@ const submitImport = async () => {
       ElMessage.success(response.data.message || '配置导入成功')
       importDialogVisible.value = false
       
-      // 重新加载设置和操作日志
-      await Promise.all([
-        loadSettings(),
-        loadOperationLogs()
-      ])
+      // 重新加载设置
+      await loadSettings()
     } else {
       ElMessage.error(response.data.message || '配置导入失败')
     }

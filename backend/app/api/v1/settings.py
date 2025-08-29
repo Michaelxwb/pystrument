@@ -70,8 +70,8 @@ async def get_settings(db = Depends(get_database)):
     logger.info("获取系统设置")
     
     try:
-        # 从数据库获取设置
-        settings_doc = await db.system_settings.find_one({"type": "system_settings"})
+        # 从系统配置集合获取设置
+        settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
         
         if not settings_doc:
             # 如果不存在，返回默认设置
@@ -108,11 +108,14 @@ async def get_settings(db = Depends(get_database)):
         if "_id" in settings_doc:
             settings_doc["_id"] = str(settings_doc["_id"])
         
-        # 保护敏感信息
-        if "ai" in settings_doc and "apiKey" in settings_doc["ai"] and settings_doc["ai"]["apiKey"]:
-            settings_doc["ai"]["apiKey"] = "********"
+        # 返回配置值
+        config_value = settings_doc.get("config_value", {})
         
-        return success_response(settings_doc)
+        # 保护敏感信息
+        if "ai" in config_value and "apiKey" in config_value["ai"] and config_value["ai"]["apiKey"]:
+            config_value["ai"]["apiKey"] = "********"
+        
+        return success_response(config_value)
         
     except Exception as e:
         logger.error(f"获取系统设置失败: {str(e)}")
@@ -126,36 +129,35 @@ async def update_settings(settings_data: SystemSettings, db = Depends(get_databa
     
     try:
         # 获取当前设置
-        current_settings = await db.system_settings.find_one({"type": "system_settings"})
-        
-        # 如果设置了占位符API密钥，保留原始密钥
-        if settings_data.ai.apiKey == "********" and current_settings and "ai" in current_settings:
-            settings_data.ai.apiKey = current_settings["ai"]["apiKey"]
+        current_settings = await db.system_config.find_one({"config_key": "platform_settings"})
         
         # 准备要保存的设置数据
         settings_dict = settings_data.dict()
-        settings_dict["type"] = "system_settings"
-        settings_dict["updated_at"] = datetime.utcnow()
+        
+        # 如果设置了占位符API密钥，保留原始密钥
+        if settings_data.ai.apiKey == "********" and current_settings and "config_value" in current_settings:
+            current_config = current_settings["config_value"]
+            if "ai" in current_config and "apiKey" in current_config["ai"]:
+                settings_dict["ai"]["apiKey"] = current_config["ai"]["apiKey"]
         
         # 更新或创建设置
+        update_data = {
+            "config_key": "platform_settings",
+            "config_value": settings_dict,
+            "description": "平台设置配置",
+            "category": "platform",
+            "is_active": True,
+            "updated_at": datetime.utcnow()
+        }
+        
         if current_settings:
-            await db.system_settings.update_one(
-                {"type": "system_settings"}, 
-                {"$set": settings_dict}
+            await db.system_config.update_one(
+                {"config_key": "platform_settings"}, 
+                {"$set": update_data}
             )
         else:
-            settings_dict["created_at"] = datetime.utcnow()
-            await db.system_settings.insert_one(settings_dict)
-        
-        # 记录操作日志
-        log_entry = {
-            "timestamp": datetime.utcnow(),
-            "action": "update_settings",
-            "details": "更新系统设置",
-            "operator": "system",  # 后续可以添加用户身份验证
-            "created_at": datetime.utcnow()
-        }
-        await db.operation_logs.insert_one(log_entry)
+            update_data["created_at"] = datetime.utcnow()
+            await db.system_config.insert_one(update_data)
         
         return success_response({"success": True})
         
@@ -182,9 +184,11 @@ async def get_system_status(db = Depends(get_database)):
         
         # 检查AI服务状态
         ai_status = {"status": "warning", "message": "需要配置API密钥"}
-        settings_doc = await db.system_settings.find_one({"type": "system_settings"})
-        if settings_doc and "ai" in settings_doc and settings_doc["ai"].get("apiKey"):
-            ai_status = {"status": "normal", "message": "已配置"}
+        settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
+        if settings_doc and "config_value" in settings_doc:
+            config_value = settings_doc["config_value"]
+            if "ai" in config_value and config_value["ai"].get("apiKey"):
+                ai_status = {"status": "normal", "message": "已配置"}
         
         # 检查存储状态
         storage_status = {
@@ -217,30 +221,10 @@ async def get_operation_logs(
     logger.info(f"获取操作日志, 页码: {page}, 大小: {size}")
     
     try:
-        # 计算跳过的记录数
-        skip = (page - 1) * size
-        
-        # 查询总数
-        total = await db.operation_logs.count_documents({})
-        
-        # 查询日志记录
-        cursor = db.operation_logs.find().sort("timestamp", -1).skip(skip).limit(size)
-        logs = []
-        
-        async for log in cursor:
-            # 处理MongoDB ObjectId
-            log["_id"] = str(log["_id"])
-            logs.append({
-                "id": str(log.get("_id")),
-                "timestamp": log.get("timestamp").isoformat(),
-                "action": log.get("action"),
-                "details": log.get("details"),
-                "operator": log.get("operator")
-            })
-        
+        # 返回空的日志列表，因为我们不再存储操作日志
         return success_response({
-            "logs": logs,
-            "total": total,
+            "logs": [],
+            "total": 0,
             "page": page,
             "size": size
         })
@@ -296,9 +280,13 @@ async def test_ai_service_connection(db = Depends(get_database)):
     
     try:
         # 获取API密钥
-        settings_doc = await db.system_settings.find_one({"type": "system_settings"})
+        settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
         
-        if not settings_doc or "ai" not in settings_doc or not settings_doc["ai"].get("apiKey"):
+        if not settings_doc or "config_value" not in settings_doc:
+            return error_response(400, "未配置API密钥")
+        
+        config_value = settings_doc["config_value"]
+        if "ai" not in config_value or not config_value["ai"].get("apiKey"):
             return error_response(400, "未配置API密钥")
         
         # 实际应用中应该测试实际的AI服务连接
@@ -319,16 +307,6 @@ async def clear_cache(db = Depends(get_database)):
     logger.info("清理缓存")
     
     try:
-        # 记录操作日志
-        log_entry = {
-            "timestamp": datetime.utcnow(),
-            "action": "clear_cache",
-            "details": "清理系统缓存",
-            "operator": "system",
-            "created_at": datetime.utcnow()
-        }
-        await db.operation_logs.insert_one(log_entry)
-        
         # 实际应用中应该执行实际的缓存清理操作
         # 这里模拟清理成功
         return success_response({
@@ -348,27 +326,20 @@ async def export_config(db = Depends(get_database)):
     
     try:
         # 获取系统设置
-        settings_doc = await db.system_settings.find_one({"type": "system_settings"})
+        settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
         
         if not settings_doc:
             return error_response(404, "未找到系统配置")
         
-        # 移除不需要导出的字段
-        if "_id" in settings_doc:
-            del settings_doc["_id"]
+        # 返回配置值
+        config_value = settings_doc.get("config_value", {})
         
-        # 记录操作日志
-        log_entry = {
-            "timestamp": datetime.utcnow(),
-            "action": "export_config",
-            "details": "导出系统配置",
-            "operator": "system",
-            "created_at": datetime.utcnow()
-        }
-        await db.operation_logs.insert_one(log_entry)
+        # 移除不需要导出的字段
+        if "_id" in config_value:
+            del config_value["_id"]
         
         # 返回JSON配置
-        return success_response(settings_doc)
+        return success_response(config_value)
         
     except Exception as e:
         logger.error(f"导出系统配置失败: {str(e)}")
@@ -393,24 +364,20 @@ async def import_config(
             return error_response(400, "配置文件格式无效")
         
         # 更新系统设置
-        config_data["type"] = "system_settings"
-        config_data["updated_at"] = datetime.utcnow()
+        update_data = {
+            "config_key": "platform_settings",
+            "config_value": config_data,
+            "description": "平台设置配置",
+            "category": "platform",
+            "is_active": True,
+            "updated_at": datetime.utcnow()
+        }
         
-        await db.system_settings.update_one(
-            {"type": "system_settings"},
-            {"$set": config_data},
+        await db.system_config.update_one(
+            {"config_key": "platform_settings"},
+            {"$set": update_data},
             upsert=True
         )
-        
-        # 记录操作日志
-        log_entry = {
-            "timestamp": datetime.utcnow(),
-            "action": "import_config",
-            "details": "导入系统配置",
-            "operator": "system",
-            "created_at": datetime.utcnow()
-        }
-        await db.operation_logs.insert_one(log_entry)
         
         return success_response({
             "success": True,

@@ -50,7 +50,7 @@ async def create_sample_analysis_records(db):
     logger.info("创建示例分析记录...")
     
     # 检查是否已有分析记录
-    count = await db.analysis_records.count_documents({})
+    count = await db.ai_analysis_results.count_documents({})
     if count > 0:
         logger.info(f"已存在 {count} 条分析记录，跳过")
         return
@@ -103,19 +103,7 @@ async def create_sample_analysis_records(db):
                     "recommendations": get_random_recommendations()
                 }
             
-            await db.analysis_records.insert_one(analysis_record)
-            
-            # 创建对应的任务状态记录
-            task_status = {
-                "task_id": task_id,
-                "analysis_id": analysis_id,
-                "status": status.replace("COMPLETED", "SUCCESS"),
-                "progress": 100 if status in ["COMPLETED", "FAILURE", "CANCELED"] else random.randint(10, 90),
-                "created_at": created_at,
-                "updated_at": updated_at
-            }
-            
-            await db.analysis_tasks.insert_one(task_status)
+            await db.ai_analysis_results.insert_one(analysis_record)
     
     logger.info("示例分析记录创建完成")
 

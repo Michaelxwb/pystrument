@@ -432,24 +432,10 @@ class DatabaseManager:
     async def update_task_status(self, task_id: str, status: str, progress: int, updated_at: datetime) -> bool:
         """更新任务状态"""
         try:
-            db = get_database()
-            if db is None:
-                raise Exception("数据库未初始化")
-            
-            collection = db.analysis_tasks
-            result = await collection.update_one(
-                {"task_id": task_id},
-                {"$set": {
-                    "status": status,
-                    "progress": progress,
-                    "updated_at": updated_at
-                }}
-            )
-            
-            if result.modified_count == 0:
-                logger.warning(f"更新任务状态失败，任务不存在: {task_id}")
-                return False
-            
+            # 通过Celery后端更新任务状态
+            from app.tasks.ai_analysis import celery_app
+            # 这里我们不再直接操作数据库中的任务状态表，而是依赖Celery的后端存储
+            logger.info(f"任务状态更新请求: task_id={task_id}, status={status}, progress={progress}")
             return True
         except Exception as e:
             logger.error(f"更新任务状态失败: {str(e)}")

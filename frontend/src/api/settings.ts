@@ -51,15 +51,6 @@ export interface SystemStatus {
   }
 }
 
-// 操作日志类型定义
-export interface OperationLog {
-  id: string
-  timestamp: string
-  action: string
-  details: string
-  operator: string
-}
-
 export const settingsApi = {
   // 获取系统设置
   getSettings() {
@@ -74,16 +65,6 @@ export const settingsApi = {
   // 获取系统状态
   getSystemStatus() {
     return http.get<SystemStatus>('/v1/settings/status')
-  },
-
-  // 获取操作日志
-  getOperationLogs(params?: { page?: number; size?: number }) {
-    return http.get<{
-      logs: OperationLog[]
-      total: number
-      page: number
-      size: number
-    }>('/v1/settings/logs', { params })
   },
 
   // 测试数据库连接

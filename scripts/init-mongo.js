@@ -146,35 +146,6 @@ db.projects.insertOne({
 
 print('Demo project created with key: demo_project_001');
 
-// 创建数据统计视图
-print('Creating views for statistics...');
-
-// 项目统计视图
-db.createView(
-  'project_stats_view',
-  'performance_records',
-  [
-    {
-      $group: {
-        _id: '$project_key',
-        total_requests: { $sum: 1 },
-        avg_duration: { $avg: '$performance_metrics.total_duration' },
-        max_duration: { $max: '$performance_metrics.total_duration' },
-        error_count: {
-          $sum: {
-            $cond: [
-              { $gte: ['$response_info.status_code', 400] },
-              1,
-              0
-            ]
-          }
-        },
-        last_request: { $max: '$timestamp' }
-      }
-    }
-  ]
-);
-
 print('Database initialization completed successfully!');
 print('');
 print('='.repeat(60));

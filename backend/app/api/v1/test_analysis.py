@@ -46,16 +46,18 @@ async def test_analysis_integration(
         ai_services = ai_config_manager.get_enabled_services()
         available_services = [name for name, service in ai_services.items()]
         
-        # 检查Celery任务
+        # 检查Celery任务状态
         task_status = None
         if existing_analysis and existing_analysis.get("task_id"):
-            task = await db.analysis_tasks.find_one({"task_id": existing_analysis.get("task_id")})
+            # 通过Celery后端获取任务状态
+            from app.tasks.ai_analysis import celery_app
+            task = celery_app.AsyncResult(existing_analysis.get("task_id"))
             if task:
                 task_status = {
-                    "task_id": task.get("task_id"),
-                    "status": task.get("status"),
-                    "progress": task.get("progress", 0),
-                    "created_at": task.get("created_at")
+                    "task_id": existing_analysis.get("task_id"),
+                    "status": task.state,
+                    "progress": getattr(task.info, 'progress', 0) if hasattr(task, 'info') else 0,
+                    "created_at": existing_analysis.get("created_at")
                 }
         
         return success_response({

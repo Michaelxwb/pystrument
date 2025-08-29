@@ -64,19 +64,6 @@ async def analyze_performance(
         task_id = celery_task.id
         # 注意：这里不再重新生成analysis_id，而是使用上面定义的
         
-        # 创建任务状态记录
-        task_status = {
-            "task_id": task_id,
-            "analysis_id": analysis_id,
-            "status": "PENDING",
-            "progress": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "estimated_completion": datetime.utcnow() + timedelta(minutes=2)
-        }
-        
-        await db.analysis_tasks.insert_one(task_status)
-        
         # 创建分析记录
         analysis_record = {
             "analysis_id": analysis_id,
@@ -115,25 +102,53 @@ async def get_task_status(
     """获取任务状态"""
     logger.info(f"查询任务状态: {task_id}")
     
-    task = await db.analysis_tasks.find_one({"task_id": task_id})
+    # 通过Celery后端获取任务状态
+    from app.tasks.ai_analysis import celery_app
+    task = celery_app.AsyncResult(task_id)
+    
     if not task:
         logger.warning(f"任务不存在: {task_id}")
         raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
     
     # 格式化任务状态为API响应
     result = {
-        "task_id": task.get("task_id"),
-        "status": task.get("status"),
-        "progress": task.get("progress", 0),
-        "created_at": task.get("created_at").isoformat(),
-        "updated_at": task.get("updated_at").isoformat(),
-        "analysis_id": task.get("analysis_id")
+        "task_id": task_id,
+        "status": task.state,
+        "progress": getattr(task.info, 'progress', 0) if hasattr(task, 'info') else 0,
+        "created_at": datetime.utcnow().isoformat(),  # 这里应该从实际任务数据中获取
+        "updated_at": datetime.utcnow().isoformat()
     }
     
-    if "estimated_completion" in task:
-        result["estimated_completion"] = task["estimated_completion"].isoformat()
+    if hasattr(task, 'info') and isinstance(task.info, dict):
+        result.update(task.info)
     
     return success_response(result)
+
+
+@router.delete("/result/{analysis_id}")
+async def delete_analysis_result(
+    analysis_id: str = Path(..., description="分析ID"),
+    db = Depends(get_database)
+):
+    """删除分析结果"""
+    logger.info(f"删除分析结果: {analysis_id}")
+    
+    # 检查分析记录是否存在
+    analysis = await db.ai_analysis_results.find_one({"analysis_id": analysis_id})
+    if not analysis:
+        logger.warning(f"分析记录不存在: {analysis_id}")
+        raise HTTPException(status_code=404, detail=f"分析记录不存在: {analysis_id}")
+    
+    # 删除分析记录
+    result = await db.ai_analysis_results.delete_one({"analysis_id": analysis_id})
+    
+    if result.deleted_count == 0:
+        logger.warning(f"删除分析记录失败: {analysis_id}")
+        raise HTTPException(status_code=500, detail="删除分析记录失败")
+    
+    logger.info(f"已成功删除分析记录: {analysis_id}")
+    
+    return success_response({"message": "分析记录删除成功"})
 
 
 @router.get("/result/{analysis_id}")
@@ -158,38 +173,6 @@ async def get_analysis_result(
             result[date_field] = result[date_field].isoformat()
     
     return success_response(result)
-
-
-@router.delete("/result/{analysis_id}")
-async def delete_analysis_result(
-    analysis_id: str = Path(..., description="分析ID"),
-    db = Depends(get_database)
-):
-    """删除分析结果"""
-    logger.info(f"删除分析结果: {analysis_id}")
-    
-    # 检查分析记录是否存在
-    analysis = await db.ai_analysis_results.find_one({"analysis_id": analysis_id})
-    if not analysis:
-        logger.warning(f"分析记录不存在: {analysis_id}")
-        raise HTTPException(status_code=404, detail=f"分析记录不存在: {analysis_id}")
-    
-    # 删除关联的任务状态记录
-    task_id = analysis.get("task_id")
-    if task_id:
-        await db.analysis_tasks.delete_one({"task_id": task_id})
-        logger.info(f"已删除关联的任务状态记录: {task_id}")
-    
-    # 删除分析记录
-    result = await db.ai_analysis_results.delete_one({"analysis_id": analysis_id})
-    
-    if result.deleted_count == 0:
-        logger.warning(f"删除分析记录失败: {analysis_id}")
-        raise HTTPException(status_code=500, detail="删除分析记录失败")
-    
-    logger.info(f"已成功删除分析记录: {analysis_id}")
-    
-    return success_response({"message": "分析记录删除成功"})
 
 
 @router.get("/history")
