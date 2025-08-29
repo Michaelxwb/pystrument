@@ -6,6 +6,38 @@
         <span class="subtitle">配置和管理平台各项参数</span>
       </div>
       <div class="header-actions">
+        <!-- 将快捷操作移到顶部 -->
+        <el-dropdown @command="handleTestCommand" :disabled="testing">
+          <el-button type="primary" :loading="testing">
+            <el-icon><Connection /></el-icon>
+            测试连接
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="all">测试所有连接</el-dropdown-item>
+              <el-dropdown-item command="database">测试数据库连接</el-dropdown-item>
+              <el-dropdown-item command="redis">测试Redis连接</el-dropdown-item>
+              <el-dropdown-item command="ai">测试AI服务连接</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        
+        <el-button type="warning" @click="clearCache" :loading="clearing">
+          <el-icon><Delete /></el-icon>
+          清理缓存
+        </el-button>
+        
+        <el-button type="success" @click="exportConfig" :loading="exporting">
+          <el-icon><Download /></el-icon>
+          导出配置
+        </el-button>
+        
+        <el-button type="info" @click="importConfig" :loading="importing">
+          <el-icon><Upload /></el-icon>
+          导入配置
+        </el-button>
+
         <el-tooltip content="刷新数据" placement="top">
           <el-button type="primary" @click="refreshAll">
             <el-icon><Refresh /></el-icon>
@@ -15,7 +47,9 @@
       </div>
     </div>
 
+    <!-- 使用更合理的两列布局 -->
     <el-row :gutter="24">
+      <!-- 左侧列：基本设置、性能监控设置、AI分析设置 -->
       <el-col :span="12">
         <!-- 基本设置 -->
         <div class="settings-section">
@@ -29,7 +63,7 @@
                 </div>
               </div>
             </template>
-            <el-form :model="basicSettings" label-width="120px">
+            <el-form :model="basicSettings" label-width="100px">
               <el-form-item label="平台名称:">
                 <el-input v-model="basicSettings.platformName" />
               </el-form-item>
@@ -37,14 +71,14 @@
                 <el-input v-model="basicSettings.adminEmail" />
               </el-form-item>
               <el-form-item label="时区:">
-                <el-select v-model="basicSettings.timezone">
+                <el-select v-model="basicSettings.timezone" style="width: 100%">
                   <el-option label="北京时间 (GMT+8)" value="Asia/Shanghai" />
                   <el-option label="UTC" value="UTC" />
                   <el-option label="纽约时间 (GMT-5)" value="America/New_York" />
                 </el-select>
               </el-form-item>
               <el-form-item label="语言:">
-                <el-select v-model="basicSettings.language">
+                <el-select v-model="basicSettings.language" style="width: 100%">
                   <el-option label="中文" value="zh-CN" />
                   <el-option label="English" value="en-US" />
                 </el-select>
@@ -65,40 +99,138 @@
                 </div>
               </div>
             </template>
-            <el-form :model="monitorSettings" label-width="120px">
+            <el-form :model="monitorSettings" label-width="100px">
               <el-form-item label="默认采样率:">
-                <el-input-number 
-                  v-model="monitorSettings.defaultSamplingRate" 
-                  :min="0" 
-                  :max="1" 
-                  :step="0.1"
-                  :precision="1"
-                />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">
-                  建议设置为0.1-0.5之间
-                </span>
+                <div class="form-item-with-tip">
+                  <el-input-number 
+                    v-model="monitorSettings.defaultSamplingRate" 
+                    :min="0" 
+                    :max="1" 
+                    :step="0.1"
+                    :precision="1"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">建议设置为0.1-0.5之间</span>
+                </div>
               </el-form-item>
               <el-form-item label="数据保留期:">
-                <el-input-number 
-                  v-model="monitorSettings.dataRetentionDays" 
-                  :min="1" 
-                  :max="365"
-                />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">天</span>
+                <div class="form-item-with-tip">
+                  <el-input-number 
+                    v-model="monitorSettings.dataRetentionDays" 
+                    :min="1" 
+                    :max="365"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">天</span>
+                </div>
               </el-form-item>
               <el-form-item label="慢查询阈值:">
-                <el-input-number 
-                  v-model="monitorSettings.slowQueryThreshold" 
-                  :min="100" 
-                  :max="10000"
-                />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">毫秒</span>
+                <div class="form-item-with-tip">
+                  <el-input-number 
+                    v-model="monitorSettings.slowQueryThreshold" 
+                    :min="100" 
+                    :max="10000"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">毫秒</span>
+                </div>
               </el-form-item>
               <el-form-item label="自动清理:">
-                <el-switch v-model="monitorSettings.autoCleanup" />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">
-                  自动清理过期数据
-                </span>
+                <div class="form-item-with-tip">
+                  <el-switch v-model="monitorSettings.autoCleanup" />
+                  <span class="form-item-tip">自动清理过期数据</span>
+                </div>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </div>
+        
+        <!-- AI分析设置 -->
+        <div class="settings-section">
+          <h3 class="section-title">AI分析设置 <el-tooltip content="AI分析服务相关配置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+          <el-card shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><MagicStick /></el-icon>
+                  <span>AI配置</span>
+                </div>
+              </div>
+            </template>
+            <el-form :model="aiSettings" label-width="100px">
+              <el-form-item label="默认AI服务:">
+                <el-select v-model="aiSettings.defaultService" style="width: 100%">
+                  <el-option label="OpenAI GPT-4" value="openai-gpt4" />
+                  <el-option label="OpenAI GPT-3.5" value="openai-gpt3.5" />
+                  <el-option label="本地模型" value="local" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="API密钥:">
+                <el-input 
+                  v-model="aiSettings.apiKey" 
+                  type="password" 
+                  placeholder="请输入OpenAI API密钥"
+                  show-password
+                />
+              </el-form-item>
+              <el-form-item label="请求超时:">
+                <div class="form-item-with-tip">
+                  <el-input-number 
+                    v-model="aiSettings.requestTimeout" 
+                    :min="10" 
+                    :max="300"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">秒</span>
+                </div>
+              </el-form-item>
+              <el-form-item label="自动分析:">
+                <div class="form-item-with-tip">
+                  <el-switch v-model="aiSettings.autoAnalysis" />
+                  <span class="form-item-tip">新记录自动触发AI分析</span>
+                </div>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </div>
+      </el-col>
+
+      <!-- 右侧列：通知设置、系统状态、保存按钮 -->
+      <el-col :span="12">
+        <!-- 通知设置 -->
+        <div class="settings-section">
+          <h3 class="section-title">通知设置 <el-tooltip content="系统通知相关配置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
+          <el-card shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <div class="card-title">
+                  <el-icon><Message /></el-icon>
+                  <span>通知配置</span>
+                </div>
+              </div>
+            </template>
+            <el-form :model="notificationSettings" label-width="100px">
+              <el-form-item label="邮件通知:">
+                <el-switch v-model="notificationSettings.emailEnabled" />
+              </el-form-item>
+              <el-form-item label="SMTP服务器:" v-if="notificationSettings.emailEnabled">
+                <el-input v-model="notificationSettings.smtpServer" />
+              </el-form-item>
+              <el-form-item label="SMTP端口:" v-if="notificationSettings.emailEnabled">
+                <el-input-number v-model="notificationSettings.smtpPort" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+              </el-form-item>
+              <el-form-item label="发件邮箱:" v-if="notificationSettings.emailEnabled">
+                <el-input v-model="notificationSettings.senderEmail" />
+              </el-form-item>
+              <el-form-item label="Webhook通知:">
+                <el-switch v-model="notificationSettings.webhookEnabled" />
+              </el-form-item>
+              <el-form-item label="Webhook URL:" v-if="notificationSettings.webhookEnabled">
+                <el-input v-model="notificationSettings.webhookUrl" />
               </el-form-item>
             </el-form>
           </el-card>
@@ -162,176 +294,28 @@
                   :percentage="getStoragePercentage(systemStatus.storage)" 
                   :status="getStorageStatus(systemStatus.storage)"
                   :stroke-width="10"
-                  style="width: 120px;"
+                  style="width: 150px;"
                 ></el-progress>
               </div>
             </div>
           </el-card>
         </div>
-      </el-col>
 
-      <el-col :span="12">
-        <!-- AI分析设置 -->
-        <div class="settings-section">
-          <h3 class="section-title">AI分析设置 <el-tooltip content="AI分析服务相关配置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
-          <el-card shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <div class="card-title">
-                  <el-icon><MagicStick /></el-icon>
-                  <span>AI配置</span>
-                </div>
-              </div>
-            </template>
-            <el-form :model="aiSettings" label-width="120px">
-              <el-form-item label="默认AI服务:">
-                <el-select v-model="aiSettings.defaultService">
-                  <el-option label="OpenAI GPT-4" value="openai-gpt4" />
-                  <el-option label="OpenAI GPT-3.5" value="openai-gpt3.5" />
-                  <el-option label="本地模型" value="local" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="API密钥:">
-                <el-input 
-                  v-model="aiSettings.apiKey" 
-                  type="password" 
-                  placeholder="请输入OpenAI API密钥"
-                  show-password
-                />
-              </el-form-item>
-              <el-form-item label="请求超时:">
-                <el-input-number 
-                  v-model="aiSettings.requestTimeout" 
-                  :min="10" 
-                  :max="300"
-                />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">秒</span>
-              </el-form-item>
-              <el-form-item label="自动分析:">
-                <el-switch v-model="aiSettings.autoAnalysis" />
-                <span style="margin-left: 10px; color: #909399; font-size: 12px;">
-                  新记录自动触发AI分析
-                </span>
-              </el-form-item>
-            </el-form>
-          </el-card>
-        </div>
-
-        <!-- 通知设置 -->
-        <div class="settings-section">
-          <h3 class="section-title">通知设置 <el-tooltip content="系统通知相关配置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
-          <el-card shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <div class="card-title">
-                  <el-icon><Message /></el-icon>
-                  <span>通知配置</span>
-                </div>
-              </div>
-            </template>
-            <el-form :model="notificationSettings" label-width="120px">
-              <el-form-item label="邮件通知:">
-                <el-switch v-model="notificationSettings.emailEnabled" />
-              </el-form-item>
-              <el-form-item label="SMTP服务器:" v-if="notificationSettings.emailEnabled">
-                <el-input v-model="notificationSettings.smtpServer" />
-              </el-form-item>
-              <el-form-item label="SMTP端口:" v-if="notificationSettings.emailEnabled">
-                <el-input-number v-model="notificationSettings.smtpPort" :min="1" :max="65535" />
-              </el-form-item>
-              <el-form-item label="发件邮箱:" v-if="notificationSettings.emailEnabled">
-                <el-input v-model="notificationSettings.senderEmail" />
-              </el-form-item>
-              <el-form-item label="Webhook通知:">
-                <el-switch v-model="notificationSettings.webhookEnabled" />
-              </el-form-item>
-              <el-form-item label="Webhook URL:" v-if="notificationSettings.webhookEnabled">
-                <el-input v-model="notificationSettings.webhookUrl" />
-              </el-form-item>
-            </el-form>
-          </el-card>
-        </div>
-        
-        <!-- 操作日志 -->
-        <!-- 已移除操作日志展示，因为不再存储操作日志 -->
-      </el-col>
-    </el-row>
-    
-    <!-- 快捷操作和保存按钮 -->
-    <el-row :gutter="24" style="margin-top: 24px;">
-      <el-col :span="12">
-        <!-- 快捷操作 -->
-        <div class="actions-section">
-          <h3 class="section-title">快捷操作 <el-tooltip content="常用系统维护操作" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
-          <el-card shadow="hover">
-            <template #header>
-              <div class="card-header">
-                <div class="card-title">
-                  <el-icon><Tools /></el-icon>
-                  <span>维护操作</span>
-                </div>
-              </div>
-            </template>
-            <div class="quick-actions">
-              <el-row :gutter="10">
-                <el-col :span="12">
-                  <el-dropdown @command="handleTestCommand" :disabled="testing">
-                    <el-button type="primary" :loading="testing" style="width: 100%">
-                      <el-icon><Connection /></el-icon>
-                      测试连接
-                      <el-icon><ArrowDown /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="all">测试所有连接</el-dropdown-item>
-                        <el-dropdown-item command="database">测试数据库连接</el-dropdown-item>
-                        <el-dropdown-item command="redis">测试Redis连接</el-dropdown-item>
-                        <el-dropdown-item command="ai">测试AI服务连接</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                </el-col>
-                <el-col :span="12">
-                  <el-button type="warning" @click="clearCache" :loading="clearing" style="width: 100%">
-                    <el-icon><Delete /></el-icon>
-                    清理缓存
-                  </el-button>
-                </el-col>
-              </el-row>
-              <el-row :gutter="10" style="margin-top: 10px;">
-                <el-col :span="12">
-                  <el-button type="success" @click="exportConfig" :loading="exporting" style="width: 100%">
-                    <el-icon><Download /></el-icon>
-                    导出配置
-                  </el-button>
-                </el-col>
-                <el-col :span="12">
-                  <el-button type="info" @click="importConfig" :loading="importing" style="width: 100%">
-                    <el-icon><Upload /></el-icon>
-                    导入配置
-                  </el-button>
-                </el-col>
-              </el-row>
-            </div>
-          </el-card>
-        </div>
-      </el-col>
-      
-      <el-col :span="12">
         <!-- 保存按钮 -->
         <div class="save-section">
-          <h3 class="section-title">设置操作 <el-tooltip content="保存或重置当前设置" placement="top"><el-icon><QuestionFilled /></el-icon></el-tooltip></h3>
           <el-card shadow="hover">
             <div style="text-align: center; padding: 20px;">
               <p style="margin-bottom: 20px; color: #606266;">请确保在保存设置前检查所有配置项是否正确</p>
-              <el-button type="primary" size="large" @click="saveSettings" :loading="saving" style="margin-right: 20px; min-width: 120px;">
-                <el-icon><Check /></el-icon>
-                保存设置
-              </el-button>
-              <el-button size="large" @click="resetSettings" style="min-width: 120px;">
-                <el-icon><Refresh /></el-icon>
-                重置
-              </el-button>
+              <div class="save-actions">
+                <el-button type="primary" @click="saveSettings" :loading="saving">
+                  <el-icon><Check /></el-icon>
+                  保存设置
+                </el-button>
+                <el-button @click="resetSettings">
+                  <el-icon><Refresh /></el-icon>
+                  重置
+                </el-button>
+              </div>
             </div>
           </el-card>
         </div>
@@ -901,14 +885,19 @@ const getActionText = (action?: string) => {
 
 <style scoped>
 .settings {
-  padding: 24px;
+  padding: 20px;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  background: #f8f9fa;
+  padding: 16px 20px;
+  border-radius: 4px;
 }
 
 .header-left {
@@ -930,22 +919,27 @@ const getActionText = (action?: string) => {
 .header-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.settings-section, .status-section, .logs-section, .actions-section, .save-section {
+.settings-section, .status-section, .save-section {
   margin-bottom: 24px;
 }
 
 .el-card {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.el-card__header {
+  padding: 12px 16px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #ebeef5;
 }
 
 .el-card__body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  padding: 20px;
 }
 
 .section-title {
@@ -953,7 +947,7 @@ const getActionText = (action?: string) => {
   align-items: center;
   font-size: 16px;
   font-weight: 500;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .card-header {
@@ -966,16 +960,18 @@ const getActionText = (action?: string) => {
   display: flex;
   align-items: center;
   font-weight: 500;
+  font-size: 14px;
 }
 
 .card-title .el-icon {
-  margin-right: 8px;
+  margin-right: 6px;
+  font-size: 16px;
 }
 
 .system-status {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .status-item {
@@ -991,65 +987,68 @@ const getActionText = (action?: string) => {
 }
 
 .status-label .el-icon {
-  margin-right: 5px;
+  margin-right: 6px;
   font-size: 16px;
 }
 
-.operation-logs {
-  max-height: 300px;
-  height: 220px;
-  overflow-y: auto;
-  scrollbar-width: thin;
+.form-item-with-tip {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
-.log-item {
-  padding: 10px;
-  border-bottom: 1px solid #ebeef5;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  margin-bottom: 8px;
+.form-item-tip {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
-.log-item:last-child {
-  border-bottom: none;
+.save-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+/* 确保表单项间距合理 */
+.el-form-item {
+  margin-bottom: 18px;
+}
+
+.el-form-item:last-child {
   margin-bottom: 0;
 }
 
-.log-time {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 5px;
-  font-weight: 500;
+/* 修复el-select宽度 */
+.el-select {
+  width: 100%;
 }
 
-.log-content {
-  font-size: 14px;
-  color: #303133;
+/* 优化进度条显示 */
+.el-progress {
+  margin-left: auto;
 }
 
-.quick-actions {
+/* 确保按钮组在小屏幕上正确显示 */
+@media (max-width: 1200px) {
+  .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  
+  .header-actions .el-button {
+    margin-bottom: 8px;
+  }
+}
+
+/* 优化卡片内边距，使内容更紧凑 */
+.el-form {
+  width: 100%;
+}
+
+/* 确保表单内容垂直居中对齐 */
+.el-form-item__content {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.log-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-}
-
-.log-operator {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 5px;
-  text-align: right;
-  font-style: italic;
-}
-
-.no-data {
-  padding: 20px;
-  text-align: center;
 }
 </style>
