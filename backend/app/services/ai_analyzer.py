@@ -9,6 +9,7 @@ import logging
 
 from app.services.ai_config import ai_config_manager, AIProvider, AIServiceConfig
 from app.models.analysis import AnalysisResults, BottleneckAnalysis, OptimizationSuggestion, RiskAssessment
+from app.utils.database import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,11 @@ class PerformanceAnalyzer:
     ) -> AnalysisResults:
         """分析性能数据"""
         try:
-            # 获取AI服务配置
-            service_config = self.config_manager.get_service(ai_service)
+            # 获取数据库连接以加载最新配置
+            db = get_database()
+            
+            # 获取AI服务配置（从数据库动态加载最新配置）
+            service_config = await self.config_manager.get_service_async(ai_service, db)
             if not service_config or not service_config.enabled:
                 raise ValueError(f"AI服务 '{ai_service}' 不可用")
             

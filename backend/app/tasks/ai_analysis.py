@@ -11,6 +11,7 @@ from app.config.settings import settings
 from app.services.ai_analyzer import performance_analyzer
 from app.utils.database import db_manager, init_database
 from app.models.analysis import AnalysisRecord, AnalysisStatus, AnalysisPriority
+from app.utils.database import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,8 @@ def analyze_performance_task(
             meta={'step': 'analyzing', 'progress': 30}
         )
         
-        # 执行AI分析
+        # 执行AI分析（传递数据库连接以加载最新配置）
+        db = get_database()
         analysis_results = loop.run_until_complete(
             performance_analyzer.analyze_performance(
                 performance_record,

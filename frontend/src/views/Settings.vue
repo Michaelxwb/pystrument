@@ -163,6 +163,7 @@
             <el-form :model="aiSettings" label-width="100px">
               <el-form-item label="默认AI服务:">
                 <el-select v-model="aiSettings.defaultService" style="width: 100%">
+                  <el-option label="阿里千问" value="aliyun_qianwen" />
                   <el-option label="OpenAI GPT-4" value="openai-gpt4" />
                   <el-option label="OpenAI GPT-3.5" value="openai-gpt3.5" />
                   <el-option label="本地模型" value="local" />
@@ -172,7 +173,7 @@
                 <el-input 
                   v-model="aiSettings.apiKey" 
                   type="password" 
-                  placeholder="请输入OpenAI API密钥"
+                  :placeholder="getApiKeyPlaceholder(aiSettings.defaultService)"
                   show-password
                 />
               </el-form-item>
@@ -404,7 +405,7 @@ const monitorSettings = ref({
 })
 
 const aiSettings = ref({
-  defaultService: 'openai-gpt3.5',
+  defaultService: 'aliyun_qianwen',
   apiKey: '',
   requestTimeout: 30,
   autoAnalysis: false
@@ -798,6 +799,21 @@ const getStatusType = (status?: string) => {
       return 'danger'
     default:
       return 'info'
+  }
+}
+
+// 获取API密钥输入提示
+const getApiKeyPlaceholder = (serviceType: string) => {
+  switch (serviceType) {
+    case 'aliyun_qianwen':
+      return '请输入阿里千问 API密钥'
+    case 'openai-gpt4':
+    case 'openai-gpt3.5':
+      return '请输入OpenAI API密钥'
+    case 'local':
+      return '本地模型无需API密钥'
+    default:
+      return '请输入API密钥'
   }
 }
 

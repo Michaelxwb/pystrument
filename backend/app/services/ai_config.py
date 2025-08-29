@@ -302,8 +302,53 @@ class AIConfigManager:
         # 保存默认配置
         self.save_config()
     
+    async def _load_from_database(self, db):
+        """从数据库加载配置"""
+        try:
+            # 从系统配置集合获取设置
+            settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
+            
+            if settings_doc and "config_value" in settings_doc:
+                config_value = settings_doc["config_value"]
+                
+                # 检查AI配置是否存在
+                if "ai" in config_value:
+                    ai_config = config_value["ai"]
+                    
+                    # 更新默认服务
+                    default_service = ai_config.get("defaultService")
+                    if default_service:
+                        # 映射前端服务名称到后端服务名称
+                        service_mapping = {
+                            "openai-gpt4": "openai",
+                            "openai-gpt3.5": "openai",
+                            "aliyun_qianwen": "aliyun_qianwen"
+                        }
+                        mapped_service = service_mapping.get(default_service, default_service)
+                        if mapped_service in self.services:
+                            self.default_service = mapped_service
+                    
+                    # 更新API密钥
+                    api_key = ai_config.get("apiKey")
+                    if api_key and self.default_service in self.services:
+                        self.services[self.default_service].api_key = api_key
+                    
+                    logger.info(f"从数据库加载AI配置成功，默认服务: {self.default_service}")
+            
+        except Exception as e:
+            logger.error(f"从数据库加载AI配置失败: {str(e)}")
+    
     def get_service(self, service_name: Optional[str] = None) -> Optional[AIServiceConfig]:
         """获取AI服务配置"""
+        service_name = service_name or self.default_service
+        return self.services.get(service_name)
+    
+    async def get_service_async(self, service_name: Optional[str] = None, db=None) -> Optional[AIServiceConfig]:
+        """获取AI服务配置（支持从数据库动态加载）"""
+        # 如果提供了数据库连接，则从数据库加载最新配置
+        if db:
+            await self._load_from_database(db)
+        
         service_name = service_name or self.default_service
         return self.services.get(service_name)
     
