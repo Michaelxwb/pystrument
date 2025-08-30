@@ -357,14 +357,21 @@ class PerformanceAnalyzer:
             logger.info(f"调用阿里千问 API: {service_config.endpoint}")
             api_response = await call_qianwen_api()
             
+            # 添加调试日志，查看实际的API响应
+            logger.info(f"阿里千问API响应: {json.dumps(api_response, ensure_ascii=False)}")
+            
             # 处理响应
             content = None
             # 首先尝试从output.choices获取内容（OpenAI格式）
             if 'output' in api_response and 'choices' in api_response['output']:
                 content = api_response['output']['choices'][0]['message']['content']
+                logger.info(f"从output.choices获取内容: {content}")
             # 然后尝试从output.text获取内容（阿里千问格式）
             elif 'output' in api_response and 'text' in api_response['output']:
                 content = api_response['output']['text']
+                logger.info(f"从output.text获取内容: {content}")
+            else:
+                logger.warning(f"无法从API响应中提取内容: {api_response}")
             
             if content:
                 # 尝试解析JSON结构
@@ -381,38 +388,98 @@ class PerformanceAnalyzer:
                         # 尝试直接解析
                         result_json = json.loads(content)
                     
+                    logger.info(f"解析后的JSON结果: {json.dumps(result_json, ensure_ascii=False)}")
+                    
                     # 解析完整的分析结果
                     performance_score = float(result_json.get('performance_score', 70))
                     
-                    # 解析瓶颈分析
+                    # 解析瓶颈分析 - 处理阿里千问返回的不同字段名
                     bottlenecks = []
-                    for bottleneck in result_json.get('bottlenecks', []):
+                    # 首先尝试阿里千问的字段名
+                    bottleneck_data = result_json.get('main_performance_bottlenecks', [])
+                    if not bottleneck_data:
+                        # 如果没有找到，尝试标准字段名
+                        bottleneck_data = result_json.get('bottlenecks', [])
+                    
+                    for bottleneck in bottleneck_data:
                         bottlenecks.append(BottleneckAnalysis(
-                            type=bottleneck.get('type', 'unknown'),
-                            severity=bottleneck.get('severity', 'medium'),
-                            function=bottleneck.get('function', 'system'),
+                            type=bottleneck.get('type', 'performance'),
+                            severity=bottleneck.get('severity', 'high'),
+                            function=bottleneck.get('function_name', bottleneck.get('function', 'unknown')),
                             description=bottleneck.get('description', ''),
-                            impact=float(bottleneck.get('impact', 0.5)) if isinstance(bottleneck.get('impact'), (int, float)) else 0.5
+                            impact=float(bottleneck.get('impact', 0.8)) if isinstance(bottleneck.get('impact', 0.8), (int, float)) else 0.8
                         ))
                     
-                    # 解析优化建议
+                    # 解析优化建议 - 处理阿里千问返回的不同结构
                     suggestions = []
-                    for suggestion in result_json.get('suggestions', []):
-                        suggestions.append(OptimizationSuggestion(
-                            category=suggestion.get('category', 'performance'),
-                            priority=suggestion.get('priority', 'medium'),
-                            title=suggestion.get('title', ''),
-                            description=suggestion.get('description', ''),
-                            code_example=suggestion.get('code_example', ''),
-                            expected_improvement=suggestion.get('expected_improvement', '')
-                        ))
+                    suggestion_data = result_json.get('optimization_suggestions', [])
+                    for suggestion in suggestion_data:
+                        # 阿里千问返回的结构可能不同，需要适配
+                        if isinstance(suggestion, dict):
+                            suggestions.append(OptimizationSuggestion(
+                                category=suggestion.get('category', 'performance'),
+                                priority=suggestion.get('priority', 'high'),
+                                title=suggestion.get('title', suggestion.get('suggestion', '')),
+                                description=suggestion.get('description', ''),
+                                code_example=suggestion.get('code_example', ''),
+                                expected_improvement=suggestion.get('expected_improvement', '')
+                            ))
+                        elif isinstance(suggestion, str):
+                            # 如果是字符串，将其作为建议描述
+                            suggestions.append(OptimizationSuggestion(
+                                category='performance',
+                                priority='medium',
+                                title='性能优化建议',
+                                description=suggestion,
+                                code_example='',
+                                expected_improvement=''
+                            ))
                     
-                    # 解析风险评估
+                    # 解析风险评估 - 处理阿里千问返回的不同字段名
+                    risks = RiskAssessment()
+                    risks_data = result_json.get('risks', {})
+                    if not risks_data:
+                        # 尝试阿里千问的字段名
+                        risks_data = {
+                            'current_risks': result_json.get('current_risks', []),
+                            'potential_issues': result_json.get('potential_issues', result_json.get('potential_risks', [])),
+                            'recommendations': result_json.get('recommendations', [])
+                        }
+                    
+                    # 处理当前风险
+                    current_risks = []
+                    if isinstance(risks_data.get('current_risks'), list):
+                        for risk in risks_data['current_risks']:
+                            if isinstance(risk, dict):
+                                current_risks.append(risk.get('description', risk.get('risk', str(risk))))
+                            else:
+                                current_risks.append(str(risk))
+                    
+                    # 处理潜在问题
+                    potential_issues = []
+                    if isinstance(risks_data.get('potential_issues'), list):
+                        for issue in risks_data['potential_issues']:
+                            if isinstance(issue, dict):
+                                potential_issues.append(issue.get('description', issue.get('risk', str(issue))))
+                            else:
+                                potential_issues.append(str(issue))
+                    
+                    # 处理建议
+                    recommendations = []
+                    if isinstance(risks_data.get('recommendations'), list):
+                        for rec in risks_data['recommendations']:
+                            if isinstance(rec, dict):
+                                recommendations.append(rec.get('description', rec.get('recommendation', str(rec))))
+                            else:
+                                recommendations.append(str(rec))
+                    
                     risks = RiskAssessment(
-                        current_risks=result_json.get('risks', {}).get('current_risks', []),
-                        potential_issues=result_json.get('risks', {}).get('potential_issues', []),
-                        recommendations=result_json.get('risks', {}).get('recommendations', [])
+                        current_risks=current_risks,
+                        potential_issues=potential_issues,
+                        recommendations=recommendations
                     )
+                    
+                    logger.info(f"分析结果 - 性能评分: {performance_score}, 瓶颈数量: {len(bottlenecks)}, 建议数量: {len(suggestions)}")
                     
                     return AnalysisResults(
                         performance_score=performance_score,
@@ -420,9 +487,9 @@ class PerformanceAnalyzer:
                         optimization_suggestions=suggestions,
                         risk_assessment=risks
                     )
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
                     # 结果不是JSON格式，采用文本解析
-                    logger.warning("千问响应不是JSON格式，尝试用文本解析")
+                    logger.warning(f"千问响应不是JSON格式，尝试用文本解析: {content}, 错误: {str(e)}")
                     return self._parse_text_result(content, processed_data)
             
             # 处理异常情况

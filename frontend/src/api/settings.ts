@@ -17,6 +17,9 @@ export interface SystemSettings {
   ai: {
     defaultService: string
     apiKey: string
+    model: string
+    maxTokens: number
+    temperature: number
     requestTimeout: number
     autoAnalysis: boolean
   }

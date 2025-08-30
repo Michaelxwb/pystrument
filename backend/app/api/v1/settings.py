@@ -33,8 +33,7 @@ class MonitorSettings(BaseModel):
 class AISettings(BaseModel):
     defaultService: str
     apiKey: str
-    apiUrl: Optional[str] = ""
-    model: Optional[str] = ""
+    model: str = ""
     maxTokens: int = 2000
     temperature: float = 0.7
     requestTimeout: int = 30
@@ -95,7 +94,6 @@ async def get_settings(db = Depends(get_database)):
                 "ai": {
                     "defaultService": "openai-gpt3.5",
                     "apiKey": "",
-                    "apiUrl": "",
                     "model": "",
                     "maxTokens": 2000,
                     "temperature": 0.7,

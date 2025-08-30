@@ -162,7 +162,7 @@
             </template>
             <el-form :model="aiSettings" label-width="100px">
               <el-form-item label="默认AI服务:">
-                <el-select v-model="aiSettings.defaultService" style="width: 100%">
+                <el-select v-model="aiSettings.defaultService" style="width: 100%" @change="onAiServiceChange">
                   <el-option label="阿里千问" value="aliyun_qianwen" />
                   <el-option label="OpenAI GPT-4" value="openai-gpt4" />
                   <el-option label="OpenAI GPT-3.5" value="openai-gpt3.5" />
@@ -178,16 +178,46 @@
                   show-password
                 />
               </el-form-item>
-              <el-form-item label="API URL:" v-if="aiSettings.defaultService !== 'local'">
-                <el-input 
-                  v-model="aiSettings.apiUrl" 
-                  :placeholder="getApiUrlPlaceholder(aiSettings.defaultService)"
-                />
-              </el-form-item>
-              <el-form-item label="模型名称:" v-if="aiSettings.defaultService !== 'openai-gpt4' && aiSettings.defaultService !== 'openai-gpt3.5'">
+              <el-form-item label="模型名称:">
+                <el-select 
+                  v-model="aiSettings.model" 
+                  style="width: 100%" 
+                  :placeholder="getModelPlaceholder(aiSettings.defaultService)"
+                  v-if="aiSettings.defaultService !== 'openai-gpt4' && aiSettings.defaultService !== 'openai-gpt3.5'"
+                >
+                  <!-- 阿里千问模型选项 -->
+                  <el-option 
+                    v-if="aiSettings.defaultService === 'aliyun_qianwen'" 
+                    label="qwen-turbo" 
+                    value="qwen-turbo" 
+                  />
+                  <el-option 
+                    v-if="aiSettings.defaultService === 'aliyun_qianwen'" 
+                    label="qwen-plus" 
+                    value="qwen-plus" 
+                  />
+                  <el-option 
+                    v-if="aiSettings.defaultService === 'aliyun_qianwen'" 
+                    label="qwen-max" 
+                    value="qwen-max" 
+                  />
+                  <!-- DeepSeek模型选项 -->
+                  <el-option 
+                    v-if="aiSettings.defaultService === 'deepseek'" 
+                    label="deepseek-chat" 
+                    value="deepseek-chat" 
+                  />
+                  <!-- 本地模型 -->
+                  <el-option 
+                    v-if="aiSettings.defaultService === 'local'" 
+                    label="custom-model" 
+                    value="custom-model" 
+                  />
+                </el-select>
                 <el-input 
                   v-model="aiSettings.model" 
                   :placeholder="getModelPlaceholder(aiSettings.defaultService)"
+                  v-else
                 />
               </el-form-item>
               <el-form-item label="最大令牌数:">
@@ -534,7 +564,15 @@ const loadSettings = async () => {
     // 更新设置
     basicSettings.value = data.basic
     monitorSettings.value = data.monitor
-    aiSettings.value = data.ai
+    aiSettings.value = {
+      defaultService: data.ai.defaultService,
+      apiKey: data.ai.apiKey,
+      model: data.ai.model || '',
+      maxTokens: data.ai.maxTokens || 2000,
+      temperature: data.ai.temperature || 0.7,
+      requestTimeout: data.ai.requestTimeout || 30,
+      autoAnalysis: data.ai.autoAnalysis || false
+    }
     notificationSettings.value = data.notification
     
     console.log('加载设置成功:', data)
@@ -554,7 +592,15 @@ const saveSettings = async () => {
     const settingsData: SystemSettings = {
       basic: basicSettings.value,
       monitor: monitorSettings.value,
-      ai: aiSettings.value,
+      ai: {
+        defaultService: aiSettings.value.defaultService,
+        apiKey: aiSettings.value.apiKey,
+        model: aiSettings.value.model,
+        maxTokens: aiSettings.value.maxTokens,
+        temperature: aiSettings.value.temperature,
+        requestTimeout: aiSettings.value.requestTimeout,
+        autoAnalysis: aiSettings.value.autoAnalysis
+      },
       notification: notificationSettings.value
     }
     
@@ -605,7 +651,6 @@ const resetSettings = async () => {
     aiSettings.value = {
       defaultService: 'openai-gpt3.5',
       apiKey: '',
-      apiUrl: '',
       model: '',
       maxTokens: 4096,
       temperature: 0.7,
@@ -865,26 +910,15 @@ const getApiKeyPlaceholder = (serviceType: string) => {
   }
 }
 
-// 获取API URL输入提示
-const getApiUrlPlaceholder = (serviceType: string) => {
-  switch (serviceType) {
-    case 'aliyun_qianwen':
-      return '默认: https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
-    case 'openai-gpt4':
-    case 'openai-gpt3.5':
-      return '默认: https://api.openai.com/v1/chat/completions'
-    case 'deepseek':
-      return '默认: https://api.deepseek.com/v1/chat/completions'
-    default:
-      return '请输入API URL'
-  }
-}
-
 // 获取模型名称输入提示
 const getModelPlaceholder = (serviceType: string) => {
   switch (serviceType) {
     case 'aliyun_qianwen':
       return '默认: qwen-turbo'
+    case 'openai-gpt4':
+      return '默认: gpt-4'
+    case 'openai-gpt3.5':
+      return '默认: gpt-3.5-turbo'
     case 'deepseek':
       return '默认: deepseek-chat'
     case 'local':
@@ -892,6 +926,33 @@ const getModelPlaceholder = (serviceType: string) => {
     default:
       return '请输入模型名称'
   }
+}
+
+// 处理AI服务变化
+const onAiServiceChange = (serviceType: string) => {
+  // 根据选择的AI服务设置默认模型
+  switch (serviceType) {
+    case 'aliyun_qianwen':
+      aiSettings.value.model = 'qwen-turbo'
+      break
+    case 'openai-gpt4':
+      aiSettings.value.model = 'gpt-4'
+      break
+    case 'openai-gpt3.5':
+      aiSettings.value.model = 'gpt-3.5-turbo'
+      break
+    case 'deepseek':
+      aiSettings.value.model = 'deepseek-chat'
+      break
+    case 'local':
+      aiSettings.value.model = 'custom-model'
+      break
+    default:
+      aiSettings.value.model = ''
+  }
+  
+  // 清除API URL，因为现在是根据服务类型动态设置
+  aiSettings.value.apiUrl = ''
 }
 
 // 获取状态文本

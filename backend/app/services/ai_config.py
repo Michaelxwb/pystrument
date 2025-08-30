@@ -278,12 +278,18 @@ class AIConfigManager:
                     # OpenAI服务配置
                     if default_service in ["openai-gpt4", "openai-gpt3.5"]:
                         model_name = "gpt-4" if default_service == "openai-gpt4" else "gpt-3.5-turbo"
+                        # 根据服务类型动态设置API URL
+                        if default_service == "openai-gpt4":
+                            endpoint = "https://api.openai.com/v1/chat/completions"
+                        else:
+                            endpoint = "https://api.openai.com/v1/chat/completions"
+                        
                         self.services["openai"] = AIServiceConfig(
                             provider=AIProvider.OPENAI,
                             enabled=True,
-                            model=model_name,
+                            model=ai_config.get("model", model_name),
                             api_key=ai_config.get("apiKey", ""),
-                            endpoint=ai_config.get("apiUrl", "https://api.openai.com/v1/chat/completions"),
+                            endpoint=endpoint,
                             max_tokens=ai_config.get("maxTokens", 4000),
                             temperature=ai_config.get("temperature", 0.3),
                             timeout=ai_config.get("requestTimeout", 30)
@@ -296,7 +302,7 @@ class AIConfigManager:
                             enabled=True,
                             model=ai_config.get("model", "qwen-turbo"),
                             api_key=ai_config.get("apiKey", ""),
-                            endpoint=ai_config.get("apiUrl", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"),
+                            endpoint="https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
                             max_tokens=ai_config.get("maxTokens", 2000),
                             temperature=ai_config.get("temperature", 0.7),
                             timeout=ai_config.get("requestTimeout", 30),
@@ -313,7 +319,7 @@ class AIConfigManager:
                             enabled=True,
                             model=ai_config.get("model", "deepseek-chat"),
                             api_key=ai_config.get("apiKey", ""),
-                            endpoint=ai_config.get("apiUrl", "https://api.deepseek.com/v1/chat/completions"),
+                            endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
                             max_tokens=ai_config.get("maxTokens", 4000),
                             temperature=ai_config.get("temperature", 0.3),
                             timeout=ai_config.get("requestTimeout", 30),
@@ -330,7 +336,7 @@ class AIConfigManager:
                             enabled=True,
                             model=ai_config.get("model", "custom-model"),
                             api_key=ai_config.get("apiKey", ""),
-                            endpoint=ai_config.get("apiUrl", ""),
+                            endpoint=ai_config.get("apiUrl", ""),  # 本地模型仍允许自定义URL
                             max_tokens=ai_config.get("maxTokens", 2000),
                             temperature=ai_config.get("temperature", 0.5),
                             timeout=ai_config.get("requestTimeout", 30),
