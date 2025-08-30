@@ -510,13 +510,13 @@ class PerformanceAnalyzer:
             # 构建提示语
             prompt = self._build_analysis_prompt(processed_data)
             
-            # 准备请求体
+            # 准备请求体 - 修正请求格式以符合DeepSeek API要求
             request_data = {
                 "model": service_config.model,
                 "messages": [
                     {
                         "role": "system",
-                        "content": "你是一个专业的性能分析师，专注于Python Web应用的性能分析与优化。请分析用户提供的性能数据，并提供结构化的分析结果。"
+                        "content": "你是一个专业的性能分析师，专注于Python Web应用的性能分析与优化。请分析用户提供的性能数据，并提供结构化的分析结果，以JSON格式返回。"
                     },
                     {
                         "role": "user",
@@ -524,7 +524,8 @@ class PerformanceAnalyzer:
                     }
                 ],
                 "temperature": service_config.temperature,
-                "max_tokens": service_config.max_tokens
+                "max_tokens": service_config.max_tokens,
+                "stream": False  # 确保非流式输出
             }
             
             # 防止网络问题，使用 tenacity 进行重试
@@ -542,12 +543,20 @@ class PerformanceAnalyzer:
         
             # 调用API
             logger.info(f"调用DeepSeek API: {service_config.endpoint}")
+            logger.info(f"请求数据: {json.dumps(request_data, ensure_ascii=False)}")
             api_response = await call_deepseek_api()
+            logger.info(f"DeepSeek API响应: {json.dumps(api_response, ensure_ascii=False)}")
             
             # 处理响应
+            content = None
             if 'choices' in api_response and len(api_response['choices']) > 0:
                 content = api_response['choices'][0]['message']['content']
-                
+                logger.info(f"从choices获取内容: {content}")
+            else:
+                logger.error(f"DeepSeek响应格式异常: {api_response}")
+                raise ValueError(f"DeepSeek响应格式异常: {api_response}")
+            
+            if content:
                 # 尝试解析JSON结构
                 try:
                     # 处理不同的JSON格式
@@ -562,38 +571,72 @@ class PerformanceAnalyzer:
                         # 尝试直接解析
                         result_json = json.loads(content)
                     
-                    # 解析完整的分析结果
+                    logger.info(f"解析后的JSON结果: {json.dumps(result_json, ensure_ascii=False)}")
+                    
+                    # 解析完整的分析结果 - 适配DeepSeek返回的特定格式
                     performance_score = float(result_json.get('performance_score', 70))
                     
-                    # 解析瓶颈分析
+                    # 解析瓶颈分析 - 适配DeepSeek的返回格式
                     bottlenecks = []
-                    for bottleneck in result_json.get('bottlenecks', []):
+                    bottleneck_analysis = result_json.get('bottleneck_analysis', {})
+                    
+                    # 处理主要瓶颈
+                    if 'primary_bottleneck' in bottleneck_analysis:
                         bottlenecks.append(BottleneckAnalysis(
-                            type=bottleneck.get('type', 'unknown'),
-                            severity=bottleneck.get('severity', 'medium'),
-                            function=bottleneck.get('function', 'system'),
-                            description=bottleneck.get('description', ''),
-                            impact=float(bottleneck.get('impact', 0.5)) if isinstance(bottleneck.get('impact'), (int, float)) else 0.5
+                            type='primary',
+                            severity='high',
+                            function='unknown',
+                            description=bottleneck_analysis['primary_bottleneck'],
+                            impact=0.9
                         ))
                     
-                    # 解析优化建议
+                    # 处理次要瓶颈
+                    if 'secondary_bottleneck' in bottleneck_analysis:
+                        bottlenecks.append(BottleneckAnalysis(
+                            type='secondary',
+                            severity='medium',
+                            function='unknown',
+                            description=bottleneck_analysis['secondary_bottleneck'],
+                            impact=0.7
+                        ))
+                    
+                    # 处理关键问题
+                    key_issues = bottleneck_analysis.get('key_issues', [])
+                    for i, issue in enumerate(key_issues):
+                        bottlenecks.append(BottleneckAnalysis(
+                            type='issue',
+                            severity='medium' if i < 2 else 'low',
+                            function='unknown',
+                            description=issue,
+                            impact=0.5 if i < 2 else 0.3
+                        ))
+                    
+                    # 解析优化建议 - 适配DeepSeek的返回格式
                     suggestions = []
-                    for suggestion in result_json.get('suggestions', []):
+                    optimization_recommendations = result_json.get('optimization_recommendations', [])
+                    for recommendation in optimization_recommendations:
                         suggestions.append(OptimizationSuggestion(
-                            category=suggestion.get('category', 'performance'),
-                            priority=suggestion.get('priority', 'medium'),
-                            title=suggestion.get('title', ''),
-                            description=suggestion.get('description', ''),
-                            code_example=suggestion.get('code_example', ''),
-                            expected_improvement=suggestion.get('expected_improvement', '')
+                            category='performance',
+                            priority=recommendation.get('priority', 'medium'),
+                            title=recommendation.get('action', ''),
+                            description=recommendation.get('details', ''),
+                            code_example='',
+                            expected_improvement=''
                         ))
                     
-                    # 解析风险评估
+                    # 解析风险评估 - 适配DeepSeek的返回格式
+                    risk_assessment_data = result_json.get('risk_assessment', {})
+                    current_risks = risk_assessment_data.get('high_risk', [])
+                    potential_issues = risk_assessment_data.get('medium_risk', [])
+                    recommendations = risk_assessment_data.get('low_risk', [])
+                    
                     risks = RiskAssessment(
-                        current_risks=result_json.get('risks', {}).get('current_risks', []),
-                        potential_issues=result_json.get('risks', {}).get('potential_issues', []),
-                        recommendations=result_json.get('risks', {}).get('recommendations', [])
+                        current_risks=current_risks,
+                        potential_issues=potential_issues,
+                        recommendations=recommendations
                     )
+                    
+                    logger.info(f"分析结果 - 性能评分: {performance_score}, 瓶颈数量: {len(bottlenecks)}, 建议数量: {len(suggestions)}")
                     
                     return AnalysisResults(
                         performance_score=performance_score,
@@ -601,13 +644,13 @@ class PerformanceAnalyzer:
                         optimization_suggestions=suggestions,
                         risk_assessment=risks
                     )
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
                     # 结果不是JSON格式，采用文本解析
-                    logger.warning("DeepSeek响应不是JSON格式，尝试用文本解析")
+                    logger.warning(f"DeepSeek响应不是JSON格式，尝试用文本解析: {content}, 错误: {str(e)}")
                     return self._parse_text_result(content, processed_data)
             
             # 处理异常情况
-            logger.error(f"DeepSeek响应格式异常: {api_response}")
+            logger.error(f"DeepSeek响应内容为空: {api_response}")
             return await self._analyze_with_fallback(processed_data)
             
         except Exception as e:

@@ -312,16 +312,22 @@ class AIConfigManager:
                             }
                         )
                     
-                    # DeepSeek服务配置
+                    # DeepSeek服务配置 - 修复API端点和模型名称
                     elif default_service == "deepseek":
+                        # 根据配置中的模型名称决定使用哪个DeepSeek模型
+                        model_name = ai_config.get("model", "deepseek-chat")
+                        # 如果配置的是deepseek-v3.1，需要映射到正确的模型名称
+                        if model_name == "deepseek-v3.1":
+                            model_name = "deepseek-chat"  # 或者 "deepseek-reasoner"
+                        
                         self.services["deepseek"] = AIServiceConfig(
                             provider=AIProvider.DEEPSEEK,
                             enabled=True,
-                            model=ai_config.get("model", "deepseek-chat"),
+                            model=model_name,  # 使用正确的模型名称
                             api_key=ai_config.get("apiKey", ""),
-                            endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                            endpoint="https://api.deepseek.com/chat/completions",  # 修正API端点
                             max_tokens=ai_config.get("maxTokens", 4000),
-                            temperature=ai_config.get("temperature", 0.3),
+                            temperature=ai_config.get("temperature", 0.7),  # 使用配置中的温度值
                             timeout=ai_config.get("requestTimeout", 30),
                             headers={
                                 "Authorization": f"Bearer {ai_config.get('apiKey', '')}",
