@@ -96,7 +96,8 @@ async def create_indexes():
         await performance_collection.create_index("request_info.method")
         await performance_collection.create_index("response_info.status_code")
         await performance_collection.create_index("performance_metrics.total_duration")
-        await performance_collection.create_index("timestamp")
+        # 修复索引冲突问题，使用带过期时间的索引
+        await performance_collection.create_index("timestamp", expireAfterSeconds=7776000)  # 90天过期
         
         # 函数调用集合索引
         function_calls_collection = mongodb_database.function_calls
@@ -115,6 +116,8 @@ async def create_indexes():
         await analysis_collection.create_index("status")
         await analysis_collection.create_index([("project_key", 1), ("created_at", -1)])
         await analysis_collection.create_index("analysis_type")
+        # 为AI分析结果也添加过期时间索引
+        await analysis_collection.create_index("created_at", expireAfterSeconds=7776000)  # 90天过期
         
         # 系统配置集合索引
         config_collection = mongodb_database.system_config
@@ -125,7 +128,11 @@ async def create_indexes():
         logger.info("数据库索引创建完成")
         
     except Exception as e:
-        logger.error(f"创建索引失败: {str(e)}")
+        # 处理索引冲突等错误
+        if "IndexOptionsConflict" in str(e):
+            logger.warning(f"索引已存在且配置不同，跳过创建: {str(e)}")
+        else:
+            logger.error(f"创建索引失败: {str(e)}")
 
 
 def get_database():

@@ -1,90 +1,91 @@
-# AI服务配置文件
-
-# 默认AI服务
-default_service: aliyun_qianwen
-
-# AI服务配置
-ai_services:
-  # 阿里云千问配置
-  aliyun_qianwen:
-    provider: aliyun_qianwen
-    enabled: true
-    model: qwen-turbo
-    api_key: "${ALIYUN_QIANWEN_API_KEY}"  # 从环境变量读取
-    endpoint: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-    max_tokens: 2000
-    temperature: 0.7
-    timeout: 30
-    headers:
-      Authorization: "Bearer ${ALIYUN_QIANWEN_API_KEY}"  # 从环境变量读取
-      Content-Type: "application/json"
-    max_retries: 3
-    retry_delay: 1.0
-    cost_per_token: 0.0
-    daily_limit: 100.0
-
-  # OpenAI配置（示例）
-  openai:
-    provider: openai
-    enabled: false  # 默认禁用
-    model: gpt-4
-    api_key: "${OPENAI_API_KEY}"  # 从环境变量读取
-    endpoint: "https://api.openai.com/v1/chat/completions"
-    max_tokens: 4000
-    temperature: 0.3
-    timeout: 30
-    headers: {}
-    max_retries: 3
-    retry_delay: 1.0
-    cost_per_token: 0.0
-    daily_limit: 100.0
-
-  # 自定义AI服务配置（示例）
-  custom:
-    provider: custom
-    enabled: false  # 默认禁用
-    model: custom-model
-    api_key: "${CUSTOM_AI_TOKEN}"  # 从环境变量读取
-    endpoint: "http://your-ai-service.com/api"
-    max_tokens: 2000
-    temperature: 0.5
-    timeout: 30
-    headers:
-      Authorization: "Bearer ${CUSTOM_AI_TOKEN}"  # 从环境变量读取
-    max_retries: 3
-    retry_delay: 1.0
-    cost_per_token: 0.0
-    daily_limit: 100.0
-
-# 分析模板
+ai_services: {}
 analysis_templates:
-  performance_analysis: |
+  bottleneck_detection: '
+
+    识别以下调用链路中的性能瓶颈：
+
+
+    {function_call_tree}
+
+
+    请分析：
+
+    1. 哪些函数是主要的性能瓶颈
+
+    2. 瓶颈的类型（数据库、计算、I/O等）
+
+    3. 影响程度评估
+
+    4. 优化优先级建议
+
+    '
+  optimization_suggestions: '
+
+    基于以下性能数据，提供具体的优化建议：
+
+
+    {performance_data}
+
+
+    请提供：
+
+    1. 数据库优化建议
+
+    2. 代码算法优化
+
+    3. 缓存策略建议
+
+    4. 架构改进建议
+
+    5. 预期的性能提升效果
+
+    '
+  performance_analysis: '
+
     请分析以下Python Web应用的性能数据：
 
+
     ## 基本信息
+
     - 请求路径: {request_path}
+
     - 请求方法: {request_method}
+
     - 响应状态: {status_code}
+
     - 框架: {framework}
 
-    ## 性能概要
-    - 总耗时: {total_duration}秒
-    - CPU时间: {cpu_time}秒
-    - 内存峰值: {memory_peak}MB
-    - 函数调用数: {function_count}
-    - 慢函数数: {slow_function_count}
 
-    ## 慢函数列表
+    ## 性能指标
+
+    - 总耗时: {total_duration}秒
+
+    - CPU时间: {cpu_time}秒
+
+    - 峰值内存: {memory_peak}MB
+
+    - 函数调用数: {function_count}
+
+    - 慢函数数量: {slow_function_count}
+
+
+    ## 最慢的函数调用
+
     {slow_functions}
 
-    请基于以上数据提供：
-    1. 性能评分 (0-100分)
-    2. 瓶颈分析 (识别主要性能问题)
-    3. 优化建议 (具体可操作的优化方案)
-    4. 风险评估 (当前存在的风险和潜在问题)
 
-    请以结构化的JSON格式返回结果，包含以下字段：
-    - performance_score: 数值型，0-100
-    - bottlenecks: 数组，每个元素包含type, severity, function, description, impact
-    - suggestions: 数组，每个元素包含category, priority, title, description, code_example, expected_improvement
-    - risks: 对象，包含current_risks, potential_issues, recommendations数组
+    请提供：
+
+    1. 性能评分（0-100分）
+
+    2. 主要性能瓶颈分析
+
+    3. 具体的优化建议
+
+    4. 潜在风险评估
+
+
+    请以JSON格式返回结构化的分析结果。
+
+    '
+default_service: openai

@@ -33,8 +33,12 @@ class MonitorSettings(BaseModel):
 class AISettings(BaseModel):
     defaultService: str
     apiKey: str
-    requestTimeout: int
-    autoAnalysis: bool
+    apiUrl: Optional[str] = ""
+    model: Optional[str] = ""
+    maxTokens: int = 2000
+    temperature: float = 0.7
+    requestTimeout: int = 30
+    autoAnalysis: bool = False
 
 class NotificationSettings(BaseModel):
     emailEnabled: bool
@@ -91,6 +95,10 @@ async def get_settings(db = Depends(get_database)):
                 "ai": {
                     "defaultService": "openai-gpt3.5",
                     "apiKey": "",
+                    "apiUrl": "",
+                    "model": "",
+                    "maxTokens": 2000,
+                    "temperature": 0.7,
                     "requestTimeout": 30,
                     "autoAnalysis": False
                 },

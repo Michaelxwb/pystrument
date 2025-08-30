@@ -20,6 +20,7 @@ class AIProvider(Enum):
     AZURE_OPENAI = "azure_openai"
     HUGGINGFACE = "huggingface"
     ALIYUN_QIANWEN = "aliyun_qianwen"
+    DEEPSEEK = "deepseek"
 
 
 @dataclass
@@ -92,66 +93,11 @@ class AIConfigManager:
     
     def _load_from_env(self):
         """从环境变量加载配置"""
-        # OpenAI配置
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
-            self.services["openai"] = AIServiceConfig(
-                provider=AIProvider.OPENAI,
-                enabled=True,
-                api_key=openai_key,
-                endpoint=os.getenv("OPENAI_ENDPOINT", "https://api.openai.com/v1/chat/completions"),
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "4000")),
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
-            )
-        
-        # Azure OpenAI配置
-        azure_key = os.getenv("AZURE_OPENAI_KEY")
-        if azure_key:
-            self.services["azure_openai"] = AIServiceConfig(
-                provider=AIProvider.AZURE_OPENAI,
-                enabled=True,
-                api_key=azure_key,
-                endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                model=os.getenv("AZURE_OPENAI_MODEL", "gpt-4"),
-                headers={
-                    "api-key": azure_key
-                }
-            )
-        
-        # 阿里千问配置
-        aliyun_key = os.getenv("ALIYUN_QIANWEN_API_KEY")
-        if aliyun_key:
-            self.services["aliyun_qianwen"] = AIServiceConfig(
-                provider=AIProvider.ALIYUN_QIANWEN,
-                enabled=True,
-                api_key=aliyun_key,
-                endpoint=os.getenv("ALIYUN_QIANWEN_ENDPOINT", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"),
-                model=os.getenv("ALIYUN_QIANWEN_MODEL", "qwen-turbo"),
-                max_tokens=int(os.getenv("ALIYUN_QIANWEN_MAX_TOKENS", "2000")),
-                temperature=float(os.getenv("ALIYUN_QIANWEN_TEMPERATURE", "0.7")),
-                headers={
-                    "Authorization": f"Bearer {aliyun_key}",
-                    "Content-Type": "application/json"
-                }
-            )
-        
-        # 自定义AI服务配置
-        custom_endpoint = os.getenv("CUSTOM_AI_ENDPOINT")
-        if custom_endpoint:
-            self.services["custom"] = AIServiceConfig(
-                provider=AIProvider.CUSTOM,
-                enabled=True,
-                endpoint=custom_endpoint,
-                api_key=os.getenv("CUSTOM_AI_TOKEN"),
-                model=os.getenv("CUSTOM_AI_MODEL", "custom-model"),
-                headers={
-                    "Authorization": f"Bearer {os.getenv('CUSTOM_AI_TOKEN', '')}"
-                }
-            )
+        # 不再从环境变量加载AI配置，所有配置通过系统设置页面进行管理
+        logger.info("跳过环境变量配置加载，使用系统设置页面配置")
         
         # 默认服务
-        self.default_service = os.getenv("DEFAULT_AI_SERVICE", "openai")
+        self.default_service = "openai"
     
     def _load_from_file(self):
         """从配置文件加载"""
@@ -232,17 +178,11 @@ class AIConfigManager:
     
     def _create_default_config(self):
         """创建默认配置"""
-        self.services = {
-            "openai": AIServiceConfig(
-                provider=AIProvider.OPENAI,
-                enabled=bool(os.getenv("OPENAI_API_KEY")),
-                api_key=os.getenv("OPENAI_API_KEY"),
-                endpoint="https://api.openai.com/v1/chat/completions",
-                model="gpt-4",
-                max_tokens=4000,
-                temperature=0.3
-            )
-        }
+        # 创建空的服务配置，所有配置通过系统设置页面进行管理
+        self.services = {}
+        
+        # 默认服务
+        self.default_service = "openai"
         
         self.analysis_templates = {
             "performance_analysis": """
@@ -305,6 +245,11 @@ class AIConfigManager:
     async def _load_from_database(self, db):
         """从数据库加载配置"""
         try:
+            # 检查数据库连接是否有效
+            if db is None:
+                logger.warning("数据库连接不可用，使用默认配置")
+                return
+            
             # 从系统配置集合获取设置
             settings_doc = await db.system_config.find_one({"config_key": "platform_settings"})
             
@@ -322,16 +267,77 @@ class AIConfigManager:
                         service_mapping = {
                             "openai-gpt4": "openai",
                             "openai-gpt3.5": "openai",
-                            "aliyun_qianwen": "aliyun_qianwen"
+                            "aliyun_qianwen": "aliyun_qianwen",
+                            "local": "custom",
+                            "deepseek": "deepseek"
                         }
                         mapped_service = service_mapping.get(default_service, default_service)
-                        if mapped_service in self.services:
-                            self.default_service = mapped_service
+                        self.default_service = mapped_service
                     
-                    # 更新API密钥
-                    api_key = ai_config.get("apiKey")
-                    if api_key and self.default_service in self.services:
-                        self.services[self.default_service].api_key = api_key
+                    # 为不同的AI服务创建配置
+                    # OpenAI服务配置
+                    if default_service in ["openai-gpt4", "openai-gpt3.5"]:
+                        model_name = "gpt-4" if default_service == "openai-gpt4" else "gpt-3.5-turbo"
+                        self.services["openai"] = AIServiceConfig(
+                            provider=AIProvider.OPENAI,
+                            enabled=True,
+                            model=model_name,
+                            api_key=ai_config.get("apiKey", ""),
+                            endpoint=ai_config.get("apiUrl", "https://api.openai.com/v1/chat/completions"),
+                            max_tokens=ai_config.get("maxTokens", 4000),
+                            temperature=ai_config.get("temperature", 0.3),
+                            timeout=ai_config.get("requestTimeout", 30)
+                        )
+                    
+                    # 阿里千问服务配置
+                    elif default_service == "aliyun_qianwen":
+                        self.services["aliyun_qianwen"] = AIServiceConfig(
+                            provider=AIProvider.ALIYUN_QIANWEN,
+                            enabled=True,
+                            model=ai_config.get("model", "qwen-turbo"),
+                            api_key=ai_config.get("apiKey", ""),
+                            endpoint=ai_config.get("apiUrl", "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"),
+                            max_tokens=ai_config.get("maxTokens", 2000),
+                            temperature=ai_config.get("temperature", 0.7),
+                            timeout=ai_config.get("requestTimeout", 30),
+                            headers={
+                                "Authorization": f"Bearer {ai_config.get('apiKey', '')}",
+                                "Content-Type": "application/json"
+                            }
+                        )
+                    
+                    # DeepSeek服务配置
+                    elif default_service == "deepseek":
+                        self.services["deepseek"] = AIServiceConfig(
+                            provider=AIProvider.DEEPSEEK,
+                            enabled=True,
+                            model=ai_config.get("model", "deepseek-chat"),
+                            api_key=ai_config.get("apiKey", ""),
+                            endpoint=ai_config.get("apiUrl", "https://api.deepseek.com/v1/chat/completions"),
+                            max_tokens=ai_config.get("maxTokens", 4000),
+                            temperature=ai_config.get("temperature", 0.3),
+                            timeout=ai_config.get("requestTimeout", 30),
+                            headers={
+                                "Authorization": f"Bearer {ai_config.get('apiKey', '')}",
+                                "Content-Type": "application/json"
+                            }
+                        )
+                    
+                    # 本地模型/自定义服务配置
+                    elif default_service == "local":
+                        self.services["custom"] = AIServiceConfig(
+                            provider=AIProvider.CUSTOM,
+                            enabled=True,
+                            model=ai_config.get("model", "custom-model"),
+                            api_key=ai_config.get("apiKey", ""),
+                            endpoint=ai_config.get("apiUrl", ""),
+                            max_tokens=ai_config.get("maxTokens", 2000),
+                            temperature=ai_config.get("temperature", 0.5),
+                            timeout=ai_config.get("requestTimeout", 30),
+                            headers={
+                                "Authorization": f"Bearer {ai_config.get('apiKey', '')}"
+                            }
+                        )
                     
                     logger.info(f"从数据库加载AI配置成功，默认服务: {self.default_service}")
             
@@ -346,7 +352,7 @@ class AIConfigManager:
     async def get_service_async(self, service_name: Optional[str] = None, db=None) -> Optional[AIServiceConfig]:
         """获取AI服务配置（支持从数据库动态加载）"""
         # 如果提供了数据库连接，则从数据库加载最新配置
-        if db:
+        if db is not None:
             await self._load_from_database(db)
         
         service_name = service_name or self.default_service
@@ -427,7 +433,7 @@ class AIConfigManager:
             return False
         
         # 检查必需的配置
-        if service.provider in [AIProvider.OPENAI, AIProvider.AZURE_OPENAI]:
+        if service.provider in [AIProvider.OPENAI, AIProvider.AZURE_OPENAI, AIProvider.ALIYUN_QIANWEN, AIProvider.DEEPSEEK]:
             return bool(service.api_key)
         elif service.provider == AIProvider.CUSTOM:
             return bool(service.endpoint)

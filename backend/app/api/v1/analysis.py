@@ -38,9 +38,22 @@ async def analyze_performance(
     # 处理AI服务名称
     ai_service_name = request.ai_service
     if ai_service_name == "default":
-        # 使用配置管理器中的默认服务
+        # 从数据库加载最新的配置并使用默认服务
+        await ai_config_manager._load_from_database(db)
         ai_service_name = ai_config_manager.default_service
         logger.info(f"使用默认AI服务: {ai_service_name}")
+    else:
+        # 映射前端服务名称到后端服务名称
+        service_mapping = {
+            "openai-gpt4": "openai",
+            "openai-gpt3.5": "openai",
+            "aliyun_qianwen": "aliyun_qianwen",
+            "local": "custom",
+            "deepseek": "deepseek"
+        }
+        mapped_service = service_mapping.get(ai_service_name, ai_service_name)
+        ai_service_name = mapped_service
+        logger.info(f"映射AI服务: {request.ai_service} -> {ai_service_name}")
     
     # 创建分析ID
     analysis_id = f"analysis_{performance_record_id}_{int(datetime.utcnow().timestamp())}"

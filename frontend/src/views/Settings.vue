@@ -166,6 +166,7 @@
                   <el-option label="阿里千问" value="aliyun_qianwen" />
                   <el-option label="OpenAI GPT-4" value="openai-gpt4" />
                   <el-option label="OpenAI GPT-3.5" value="openai-gpt3.5" />
+                  <el-option label="DeepSeek" value="deepseek" />
                   <el-option label="本地模型" value="local" />
                 </el-select>
               </el-form-item>
@@ -176,6 +177,43 @@
                   :placeholder="getApiKeyPlaceholder(aiSettings.defaultService)"
                   show-password
                 />
+              </el-form-item>
+              <el-form-item label="API URL:" v-if="aiSettings.defaultService !== 'local'">
+                <el-input 
+                  v-model="aiSettings.apiUrl" 
+                  :placeholder="getApiUrlPlaceholder(aiSettings.defaultService)"
+                />
+              </el-form-item>
+              <el-form-item label="模型名称:" v-if="aiSettings.defaultService !== 'openai-gpt4' && aiSettings.defaultService !== 'openai-gpt3.5'">
+                <el-input 
+                  v-model="aiSettings.model" 
+                  :placeholder="getModelPlaceholder(aiSettings.defaultService)"
+                />
+              </el-form-item>
+              <el-form-item label="最大令牌数:">
+                <div class="form-item-with-tip">
+                  <el-input-number 
+                    v-model="aiSettings.maxTokens" 
+                    :min="100" 
+                    :max="32768"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">tokens</span>
+                </div>
+              </el-form-item>
+              <el-form-item label="温度:">
+                <div class="form-item-with-tip">
+                  <el-slider 
+                    v-model="aiSettings.temperature" 
+                    :min="0" 
+                    :max="1" 
+                    :step="0.1" 
+                    show-input
+                    style="width: 100%"
+                  />
+                  <span class="form-item-tip">控制输出随机性</span>
+                </div>
               </el-form-item>
               <el-form-item label="请求超时:">
                 <div class="form-item-with-tip">
@@ -407,6 +445,10 @@ const monitorSettings = ref({
 const aiSettings = ref({
   defaultService: 'aliyun_qianwen',
   apiKey: '',
+  apiUrl: '',
+  model: '',
+  maxTokens: 2000,
+  temperature: 0.7,
   requestTimeout: 30,
   autoAnalysis: false
 })
@@ -563,6 +605,10 @@ const resetSettings = async () => {
     aiSettings.value = {
       defaultService: 'openai-gpt3.5',
       apiKey: '',
+      apiUrl: '',
+      model: '',
+      maxTokens: 4096,
+      temperature: 0.7,
       requestTimeout: 30,
       autoAnalysis: false
     }
@@ -810,10 +856,41 @@ const getApiKeyPlaceholder = (serviceType: string) => {
     case 'openai-gpt4':
     case 'openai-gpt3.5':
       return '请输入OpenAI API密钥'
+    case 'deepseek':
+      return '请输入DeepSeek API密钥'
     case 'local':
       return '本地模型无需API密钥'
     default:
       return '请输入API密钥'
+  }
+}
+
+// 获取API URL输入提示
+const getApiUrlPlaceholder = (serviceType: string) => {
+  switch (serviceType) {
+    case 'aliyun_qianwen':
+      return '默认: https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
+    case 'openai-gpt4':
+    case 'openai-gpt3.5':
+      return '默认: https://api.openai.com/v1/chat/completions'
+    case 'deepseek':
+      return '默认: https://api.deepseek.com/v1/chat/completions'
+    default:
+      return '请输入API URL'
+  }
+}
+
+// 获取模型名称输入提示
+const getModelPlaceholder = (serviceType: string) => {
+  switch (serviceType) {
+    case 'aliyun_qianwen':
+      return '默认: qwen-turbo'
+    case 'deepseek':
+      return '默认: deepseek-chat'
+    case 'local':
+      return '请输入本地模型名称'
+    default:
+      return '请输入模型名称'
   }
 }
 

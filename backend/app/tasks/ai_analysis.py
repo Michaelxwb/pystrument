@@ -407,16 +407,9 @@ def generate_performance_report_task(
         raise
 
 
-# 从修复版中导入任务
-try:
-    from app.tasks.ai_analysis_fix import analyze_performance_fixed_task
-except ImportError:
-    logger.warning("无法导入修复版分析任务")
-
 # 任务路由配置
 celery_app.conf.task_routes = {
     'ai_analysis.analyze_performance': {'queue': 'analysis'},
-    'ai_analysis.analyze_performance_fixed': {'queue': 'analysis'},
     'ai_analysis.batch_analyze_performance': {'queue': 'batch'},
     'ai_analysis.cleanup_old_analysis': {'queue': 'maintenance'},
     'ai_analysis.performance_report': {'queue': 'reports'},
