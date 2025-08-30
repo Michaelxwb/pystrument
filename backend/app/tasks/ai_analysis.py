@@ -143,7 +143,8 @@ def analyze_performance_task(
                 status=AnalysisStatus.SUCCESS,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
-                priority=AnalysisPriority(priority)
+                priority=AnalysisPriority(priority),
+                analysis_type="ai_analysis"  # 设置默认分析类型
             )
             
             # 保存到数据库
@@ -207,7 +208,8 @@ def analyze_performance_task(
                     status=AnalysisStatus.FAILURE,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
-                    priority=AnalysisPriority(priority)
+                    priority=AnalysisPriority(priority),
+                    analysis_type="ai_analysis"  # 设置默认分析类型
                 )
                 loop.run_until_complete(db_manager.save_analysis_record(analysis_record))
         except Exception as inner_e:

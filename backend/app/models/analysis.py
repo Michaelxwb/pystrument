@@ -98,3 +98,4 @@ class AnalysisRecord(BaseModel):
     results: Optional[AnalysisResults] = Field(None, description="分析结果")
     task_id: str = Field(..., description="关联的任务ID")
     priority: AnalysisPriority = Field(..., description="任务优先级")
+    analysis_type: Optional[str] = Field("ai_analysis", description="分析类型")

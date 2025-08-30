@@ -88,7 +88,8 @@ async def analyze_performance(
             "updated_at": datetime.utcnow(),
             "results": None,
             "task_id": task_id,
-            "priority": request.priority.value
+            "priority": request.priority.value,
+            "analysis_type": "ai_analysis"  # 设置默认分析类型
         }
         
         await db.ai_analysis_results.insert_one(analysis_record)
@@ -202,9 +203,13 @@ async def get_all_analysis_history(
     # 构建查询条件
     query = {}
     if status:
+        logger.info(f"添加状态过滤条件: {status}")
         query["status"] = status
     if analysis_type:
+        logger.info(f"添加分析类型过滤条件: {analysis_type}")
         query["analysis_type"] = analysis_type
+    
+    logger.info(f"查询条件: {query}")
     
     # 计算总数
     total = await db.ai_analysis_results.count_documents(query)
@@ -323,4 +328,79 @@ async def get_project_analysis_history(
         "page": page,
         "size": size,
         "pages": (total + size - 1) // size
+    })
+
+
+@router.get("/debug/analysis-types")
+async def get_analysis_types(
+    db = Depends(get_database)
+):
+    """(调试)获取所有分析类型"""
+    logger.info(f"获取所有分析类型")
+    
+    # 从数据库获取分析类型数据
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$analysis_type",
+                "count": {"$sum": 1}
+            }
+        },
+        {
+            "$project": {
+                "analysis_type": "$_id",
+                "count": 1,
+                "_id": 0
+            }
+        }
+    ]
+    
+    cursor = db.ai_analysis_results.aggregate(pipeline)
+    types = []
+    async for item in cursor:
+        types.append(item)
+    
+    # 检查所有记录是否都有分析类型字段
+    total_records = await db.ai_analysis_results.count_documents({})
+    records_with_type = await db.ai_analysis_results.count_documents({"analysis_type": {"$exists": True}})
+    
+    return success_response({
+        "analysis_types": types,
+        "total_records": total_records,
+        "records_with_type": records_with_type,
+        "coverage_percentage": round(records_with_type / total_records * 100 if total_records > 0 else 0, 2)
+    })
+
+
+@router.get("/debug/analyze-records")
+async def analyze_records(
+    db = Depends(get_database)
+):
+    """(调试)分析记录数据"""
+    logger.info(f"分析记录数据")
+    
+    # 获取所有记录并检查分析类型字段
+    records = []
+    async for record in db.ai_analysis_results.find({}).limit(10):
+        records.append({
+            "analysis_id": record.get("analysis_id"),
+            "status": record.get("status"),
+            "ai_service": record.get("ai_service"),
+            "has_analysis_type": "analysis_type" in record,
+            "analysis_type": record.get("analysis_type", "未设置"),
+            "created_at": record.get("created_at").isoformat() if record.get("created_at") else None
+        })
+    
+    # 获取前端过滤条件值在数据库中的匹配数量
+    ai_analysis_count = await db.ai_analysis_results.count_documents({"analysis_type": "ai_analysis"})
+    performance_report_count = await db.ai_analysis_results.count_documents({"analysis_type": "performance_report"})
+    trend_analysis_count = await db.ai_analysis_results.count_documents({"analysis_type": "trend_analysis"})
+    
+    return success_response({
+        "sample_records": records,
+        "type_counts": {
+            "ai_analysis": ai_analysis_count,
+            "performance_report": performance_report_count,
+            "trend_analysis": trend_analysis_count
+        }
     })

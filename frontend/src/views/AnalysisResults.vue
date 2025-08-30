@@ -151,41 +151,55 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="scope">
-            <el-button 
-              type="primary" 
-              size="small" 
-              @click="viewDetail(scope.row)"
-              :disabled="scope.row.status !== 'completed'"
-              circle
-            >
-              <el-icon><View /></el-icon>
-            </el-button>
-            <el-dropdown @command="(cmd) => handleDownloadCommand(scope.row, cmd)" trigger="click">
-              <el-button 
-                type="success" 
-                size="small" 
-                :disabled="scope.row.status !== 'completed'"
-                circle
+            <div class="table-actions">
+              <el-tooltip content="查看分析详情" placement="top">
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  @click="viewDetail(scope.row)"
+                  :disabled="scope.row.status !== 'completed'"
+                  circle
+                >
+                  <el-icon><View /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="下载分析报告" placement="top">
+                <el-dropdown @command="(cmd) => handleDownloadCommand(scope.row, cmd)" trigger="click">
+                  <el-button 
+                    type="success" 
+                    size="small" 
+                    :disabled="scope.row.status !== 'completed'"
+                    circle
+                  >
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="json">JSON格式</el-dropdown-item>
+                      <el-dropdown-item command="pdf">PDF格式</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </el-tooltip>
+              <el-popconfirm
+                title="确定要删除这个分析结果吗？"
+                @confirm="deleteAnalysis(scope.row)"
               >
-                <el-icon><Download /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="json">JSON格式</el-dropdown-item>
-                  <el-dropdown-item command="pdf">PDF格式</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button 
-              type="danger" 
-              size="small" 
-              @click="deleteAnalysis(scope.row)"
-              circle
-            >
-              <el-icon><Delete /></el-icon>
-            </el-button>
+                <template #reference>
+                  <el-tooltip content="删除分析结果" placement="top">
+                    <el-button 
+                      type="danger" 
+                      size="small" 
+                      circle
+                    >
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </template>
+              </el-popconfirm>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -286,15 +300,35 @@ const loadProjects = async () => {
 const loadAnalysisResults = async () => {
   loading.value = true
   try {
+    // 将前端状态值映射为后端状态值
+    const statusMap: Record<string, string> = {
+      'pending': 'PENDING',
+      'processing': 'IN_PROGRESS',
+      'completed': 'SUCCESS',
+      'failed': 'FAILURE'
+    }
+    
+    // 分析类型映射 (前端和后端值保持一致)
+    // 注意: 后端使用的是小写带下划线的格式, 不需要映射
+    // const analysisTypeMap: Record<string, string> = {
+    //   'ai_analysis': 'AI_ANALYSIS',
+    //   'performance_report': 'PERFORMANCE_REPORT',
+    //   'trend_analysis': 'TREND_ANALYSIS'
+    // }
+    
     const params = {
       page: pagination.value.page,
       size: pagination.value.size,
-      status: filters.value.status || undefined,
-      analysis_type: filters.value.analysisType || undefined
+      status: filters.value.status ? statusMap[filters.value.status] : undefined,
+      analysis_type: filters.value.analysisType // 不需要映射，直接传递
     }
+    
+    console.log('发送的请求参数:', params)
     
     // 使用获取所有分析历史的方法
     const response = await analysisApi.getAllAnalysisHistory(params)
+    
+    console.log('服务器响应:', response.data)
     
     analysisResults.value = response.data.records.map((item: any) => {
       // 状态映射：将后端返回的大写状态转换为前端所需的小写状态
@@ -356,16 +390,19 @@ const loadAnalysisResults = async () => {
 
 const handleFilterChange = () => {
   // 筛选条件变化时自动触发搜索
+  console.log('筛选条件变化:', filters.value)
   pagination.value.page = 1
   loadAnalysisResults()
 }
 
 const search = () => {
+  console.log('点击搜索按钮，当前筛选条件:', filters.value)
   pagination.value.page = 1
   loadAnalysisResults()
 }
 
 const resetFilters = () => {
+  console.log('重置筛选条件')
   filters.value = {
     projectKey: '',
     status: '',
@@ -698,6 +735,11 @@ const getStatusText = (status: string) => {
     display: flex;
     justify-content: flex-end;
     margin-top: 20px;
+  }
+  
+  .table-actions {
+    display: flex;
+    gap: 8px;
   }
 }
 </style>
