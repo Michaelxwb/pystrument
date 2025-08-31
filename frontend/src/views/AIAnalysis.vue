@@ -283,7 +283,7 @@
               {{ formatDateTime(analysisRecord?.created_at) }}
             </el-descriptions-item>
             <el-descriptions-item label="完成时间">
-              {{ formatDateTime(analysisRecord?.completed_at) }}
+              {{ formatDateTime(analysisRecord?.updated_at) }}
             </el-descriptions-item>
             <el-descriptions-item label="AI服务">
               {{ analysisRecord?.ai_service || 'default' }}
@@ -352,7 +352,7 @@ const loading = ref(false)
 const analyzing = ref(false)
 const analyzeProgress = ref(0)
 const error = ref('')
-const analysisData = ref<any | null>(null)
+const analysisData = ref<AnalysisResults | null>(null)
 const analysisRecord = ref<AnalysisRecord | null>(null)
 const activeSuggestions = ref<number[]>([])
 const projectName = ref('')
@@ -392,7 +392,9 @@ const loadAnalysisData = async () => {
               potential_issues: [],
               recommendations: []
             },
-            summary: response.data.results.summary
+            summary: response.data.results.summary,
+            bottlenecks: response.data.results.bottleneck_analysis || [],
+            recommendations: (response.data.results.optimization_suggestions || []).map(s => s.title)
           }
         }
         
@@ -470,7 +472,9 @@ const triggerAnalysis = async () => {
                 potential_issues: [],
                 recommendations: []
               },
-              summary: resultResponse.data.results.summary
+              summary: resultResponse.data.results.summary,
+              bottlenecks: resultResponse.data.results.bottleneck_analysis || [],
+              recommendations: (resultResponse.data.results.optimization_suggestions || []).map(s => s.title)
             }
           }
           

@@ -210,11 +210,18 @@ const emits = defineEmits<{
   close: []
 }>()
 
+// 定义带children属性的扩展接口
+interface ExtendedFunctionCall extends FunctionCall {
+  children?: ExtendedFunctionCall[]
+  highlighted?: boolean
+  id: string
+}
+
 // 响应式数据
 const searchText = ref('')
 const sortBy = ref('duration')
 const showDetails = ref(false)
-const selectedFunction = ref<FunctionCall | null>(null)
+const selectedFunction = ref<ExtendedFunctionCall | null>(null)
 const highlightedId = ref('')
 
 // Refs
@@ -282,12 +289,12 @@ const treeData = computed(() => {
   }
   
   // 构建树形结构
-  const result: any[] = []
-  const nodeMap = new Map()
+  const result: ExtendedFunctionCall[] = []
+  const nodeMap = new Map<string, ExtendedFunctionCall>()
   
   // 首先创建所有节点
   for (const call of calls) {
-    const node = {
+    const node: ExtendedFunctionCall = {
       ...call,
       id: call.id || call.call_id || `${call.function_name}_${call.depth}_${Math.random()}`,
       children: [],
@@ -309,8 +316,8 @@ const treeData = computed(() => {
     // 有父调用ID的情况
     if (call.parent_call_id) {
       const parentNode = nodeMap.get(call.parent_call_id)
-      if (parentNode) {
-        if (!parentNode.children.some(child => child.id === node.id)) {
+      if (parentNode && parentNode.children) {
+        if (!parentNode.children.some((child: ExtendedFunctionCall) => child.id === node.id)) {
           parentNode.children.push(node)
         }
         continue
@@ -337,7 +344,7 @@ const treeData = computed(() => {
         )
         
         const parentNode = nodeMap.get(closestParent.id || closestParent.call_id)
-        if (parentNode && !parentNode.children.some(child => child.id === node.id)) {
+        if (parentNode && parentNode.children && !parentNode.children.some((child: ExtendedFunctionCall) => child.id === node.id)) {
           parentNode.children.push(node)
         }
       } else {
@@ -353,7 +360,10 @@ const treeData = computed(() => {
   return result
 })
 
-const treeProps = {
+const treeProps: {
+  children: string;
+  label: string;
+} = {
   children: 'children',
   label: 'function_name'
 }
@@ -371,9 +381,9 @@ async function getAllKeys() {
   }
   
   // 递归获取所有节点的key
-  const keys = [];
+  const keys: string[] = [];
   
-  const getKeys = (nodes) => {
+  const getKeys = (nodes: ExtendedFunctionCall[]) => {
     if (!nodes) return;
     
     for (const node of nodes) {
@@ -396,9 +406,9 @@ async function getSlowNodeKeys() {
     return [];
   }
   
-  const slowKeys = [];
+  const slowKeys: string[] = [];
   
-  const findSlowNodes = (nodes) => {
+  const findSlowNodes = (nodes: ExtendedFunctionCall[]) => {
     if (!nodes) return;
     
     for (const node of nodes) {
@@ -424,7 +434,7 @@ const expandAll = async () => {
       return;
     }
     
-    if (treeRef.value && treeRef.value.setCheckedKeys) {
+    if (treeRef.value && typeof treeRef.value.setCheckedKeys === "function") {
       // 使用Element Plus的Tree组件内部API
       for (const key of allKeys) {
         treeRef.value.store.nodesMap[key].expanded = true;
@@ -438,7 +448,7 @@ const expandAll = async () => {
       for (const node of unexpandedNodes) {
         const expandBtn = node.querySelector('.el-tree-node__expand-icon');
         if (expandBtn && !expandBtn.classList.contains('is-leaf')) {
-          expandBtn.click();
+          (expandBtn as HTMLElement).click();
         }
       }
       ElMessage.success('已展开所有节点');
@@ -474,7 +484,7 @@ const collapseAll = async () => {
       for (const node of expandedNodes) {
         const expandBtn = node.querySelector('.el-tree-node__expand-icon');
         if (expandBtn && !expandBtn.classList.contains('is-leaf')) {
-          expandBtn.click();
+          (expandBtn as HTMLElement).click();
         }
       }
       ElMessage.success('已收起所有节点');
@@ -524,7 +534,14 @@ const expandSlowNodes = async () => {
   }
 }
 
-const highlightFunction = (func: FunctionCall) => {
+// 定义带children属性的扩展接口
+interface ExtendedFunctionCall extends FunctionCall {
+  children?: ExtendedFunctionCall[]
+  highlighted?: boolean
+  id: string
+}
+
+const highlightFunction = (func: ExtendedFunctionCall) => {
   highlightedId.value = func.id || ''
   selectedFunction.value = func
   showDetails.value = true

@@ -66,8 +66,8 @@ export const usePerformanceStore = defineStore('performance', () => {
       
       // 移除空值
       Object.keys(queryParams).forEach(key => {
-        if (queryParams[key] === '' || queryParams[key] === undefined) {
-          delete queryParams[key]
+        if (queryParams[key as keyof typeof queryParams] === '' || queryParams[key as keyof typeof queryParams] === undefined) {
+          delete queryParams[key as keyof typeof queryParams]
         }
       })
       
@@ -183,13 +183,30 @@ export const usePerformanceStore = defineStore('performance', () => {
   
   const exportRecords = async (format: 'csv' | 'excel' = 'csv') => {
     try {
-      const response = await performanceApi.exportRecords({
-        ...filters.value,
-        format
+      // 转换过滤器字段名以匹配API要求
+      const apiParams: any = {
+        project_key: filters.value.projectKey,
+        format,
+        start_time: filters.value.startTime || undefined,
+        end_time: filters.value.endTime || undefined,
+        path: filters.value.path || undefined,
+        method: filters.value.method || undefined,
+        min_duration: filters.value.minDuration,
+        max_duration: filters.value.maxDuration,
+        status_code: filters.value.statusCode
+      }
+      
+      // 移除空值
+      Object.keys(apiParams).forEach(key => {
+        if (apiParams[key] === '' || apiParams[key] === undefined) {
+          delete apiParams[key]
+        }
       })
       
+      const response = await performanceApi.exportRecords(apiParams)
+      
       // 处理文件下载
-      const blob = new Blob([response], { 
+      const blob = new Blob([response.data], { 
         type: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
       })
       const url = window.URL.createObjectURL(blob)

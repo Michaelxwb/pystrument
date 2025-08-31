@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage, ElLoading } from 'element-plus'
 import type { LoadingInstance } from 'element-plus/es/components/loading/src/loading'
 
@@ -24,7 +24,7 @@ let loadingInstance: LoadingInstance | null = null
 let requestCount = 0
 
 request.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     // 显示加载动画
     if (config.loading !== false) {
       requestCount++
@@ -47,10 +47,7 @@ request.interceptors.request.use(
     
     // 添加项目密钥（如果需要）
     if (config.projectKey) {
-      config.headers = {
-        ...config.headers,
-        'X-Project-Key': config.projectKey
-      }
+      config.headers.set('X-Project-Key', config.projectKey)
     }
     
     return config
@@ -77,7 +74,7 @@ request.interceptors.response.use(
     
     // 统一处理响应
     if (data.code === 0) {
-      return data
+      return data as any
     } else {
       // 业务错误
       ElMessage.error(data.msg || '请求失败')

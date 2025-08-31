@@ -259,6 +259,7 @@ import {
   QuestionFilled
 } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/dateUtils'
+import type { PerformanceRecord } from '@/types/performance'
 
 const route = useRoute()
 const router = useRouter()
@@ -272,7 +273,22 @@ const props = defineProps<{
 const traceId = ref(props.traceId || route.params.traceId as string)
 const treeRef = ref()
 
-const record = ref({
+interface DetailRecord {
+  path: string
+  method: string
+  statusCode: number
+  totalDuration: number
+  cpuTime: number
+  ioWait: number
+  memoryPeak: number
+  timestamp: string
+  projectKey: string
+  headers: Record<string, string>
+  params: Record<string, any>
+  body: any
+}
+
+const record = ref<DetailRecord>({
   path: '/api/users/profile',
   method: 'GET',
   statusCode: 200,
@@ -294,7 +310,7 @@ const record = ref({
   body: null
 })
 
-const functionCalls = ref([])
+const functionCalls = ref<any[]>([])
 
 const treeProps = {
   children: 'children',
@@ -347,8 +363,8 @@ const refreshData = () => {
   ElMessage.success('数据刷新成功')
 }
 
-const getMethodTagType = (method: string) => {
-  const types: Record<string, string> = {
+const getMethodTagType = (method: string): 'success' | 'primary' | 'warning' | 'danger' | 'info' => {
+  const types: Record<string, 'success' | 'primary' | 'warning' | 'danger' | 'info'> = {
     'GET': 'success',
     'POST': 'primary',
     'PUT': 'warning',
@@ -403,7 +419,7 @@ const processFunctionCalls = (calls: any[], totalDuration: number) => {
   })
   
   // 构建树形结构
-  const rootCalls = []
+  const rootCalls: any[] = []
   calls.forEach(call => {
     const node = callMap.get(call.call_id)
     

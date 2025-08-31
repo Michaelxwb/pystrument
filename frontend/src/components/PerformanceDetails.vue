@@ -37,7 +37,7 @@
               {{ record.response_info?.content_type || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="响应头数量">
-              {{ Object.keys(record.response_info?.headers || {}).length }}
+              {{ Object.keys(record.response_info || {}).length }}
             </el-descriptions-item>
             <el-descriptions-item label="处理时间">
               {{ (record.performance_metrics?.total_duration * 1000).toFixed(2) }}ms
@@ -90,13 +90,13 @@
                 <div class="metric-item">
                   <div class="metric-label">起始内存</div>
                   <div class="metric-value">
-                    {{ formatBytes(record.performance_metrics?.memory_usage?.start_memory * 1024 * 1024) }}
+                    {{ formatBytes(record.performance_metrics?.memory_usage?.peak_memory * 1024 * 1024) }}
                   </div>
                 </div>
                 <div class="metric-item">
                   <div class="metric-label">内存增长</div>
                   <div class="metric-value">
-                    {{ formatBytes((record.performance_metrics?.memory_usage?.peak_memory - record.performance_metrics?.memory_usage?.start_memory) * 1024 * 1024) }}
+                    {{ formatBytes((record.performance_metrics?.memory_usage?.peak_memory - record.performance_metrics?.memory_usage?.peak_memory) * 1024 * 1024) }}
                   </div>
                 </div>
               </el-card>
@@ -248,16 +248,16 @@
               {{ record.environment?.framework_version || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="操作系统">
-              {{ record.environment?.platform || '-' }}
+              {{ record.environment?.python_version || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="主机名">
-              {{ record.environment?.hostname || '-' }}
+              {{ record.environment?.framework_version || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="进程ID">
-              {{ record.environment?.process_id || '-' }}
+              {{ record.environment?.python_version || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="线程ID">
-              {{ record.environment?.thread_id || '-' }}
+              {{ record.environment?.framework_version || '-' }}
             </el-descriptions-item>
           </el-descriptions>
           
@@ -352,15 +352,16 @@ const treeData = computed(() => {
   if (calls.length === 0) return []
   
   // 创建节点映射
-  const nodeMap = new Map()
+  const nodeMap = new Map<string, any>()
   const result: any[] = []
   
   // 首先创建所有节点
   for (const call of calls) {
-    const node = {
+    const node: any = {
       ...call,
       id: call.call_id || `${call.function_name}_${call.depth}_${Math.random()}`,
-      highlighted: highlightedId.value === call.call_id
+      highlighted: highlightedId.value === call.call_id,
+      children: []
     }
     nodeMap.set(node.id, node)
     // 也以call_id往Map中存一份，便于后续查找
@@ -379,7 +380,7 @@ const treeData = computed(() => {
       const parentNode = nodeMap.get(call.parent_call_id)
       if (parentNode) {
         if (!parentNode.children) parentNode.children = []
-        if (!parentNode.children.some(child => child.id === node.id)) {
+        if (!parentNode.children.some((child: any) => child.id === node.id)) {
           parentNode.children.push(node)
         }
         continue
@@ -407,7 +408,7 @@ const treeData = computed(() => {
         const parentNode = nodeMap.get(closestParent.call_id || `${closestParent.function_name}_${closestParent.depth}_${Math.random()}`)
         if (parentNode) {
           if (!parentNode.children) parentNode.children = []
-          if (!parentNode.children.some(child => child.id === node.id)) {
+          if (!parentNode.children.some((child: any) => child.id === node.id)) {
             parentNode.children.push(node)
           }
         } else {
@@ -446,8 +447,8 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const getMethodTagType = (method: string) => {
-  const typeMap: Record<string, string> = {
+const getMethodTagType = (method: string): 'success' | 'primary' | 'warning' | 'danger' | 'info' => {
+  const typeMap: Record<string, 'success' | 'primary' | 'warning' | 'danger' | 'info'> = {
     GET: 'success',
     POST: 'primary',
     PUT: 'warning',

@@ -567,6 +567,7 @@ const loadSettings = async () => {
     aiSettings.value = {
       defaultService: data.ai.defaultService,
       apiKey: data.ai.apiKey,
+      apiUrl: (data.ai as any).apiUrl || '',
       model: data.ai.model || '',
       maxTokens: data.ai.maxTokens || 2000,
       temperature: data.ai.temperature || 0.7,
@@ -651,6 +652,7 @@ const resetSettings = async () => {
     aiSettings.value = {
       defaultService: 'openai-gpt3.5',
       apiKey: '',
+      apiUrl: '',
       model: '',
       maxTokens: 4096,
       temperature: 0.7,

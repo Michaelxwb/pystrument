@@ -335,7 +335,7 @@ const pagination = reactive({
 })
 
 // 项目表单
-const projectForm = reactive<ProjectCreate>({
+const projectForm = reactive<ProjectCreate & { sampling_rate?: number; enable_ai_analysis?: boolean }>({
   name: '',
   description: '',
   framework: 'flask',
@@ -345,7 +345,7 @@ const projectForm = reactive<ProjectCreate>({
 })
 
 // 表单验证规则
-const projectFormRules = {
+const projectFormRules: FormRules = {
   name: [
     { required: true, message: '请输入项目名称', trigger: 'blur' },
     { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
@@ -407,7 +407,7 @@ const editProject = (project: Project) => {
     framework: project.framework,
     base_url: project.base_url,
     sampling_rate: project.config?.sampling_rate || 10,
-    enable_ai_analysis: project.config?.enable_ai_analysis ?? true
+    enable_ai_analysis: project.config?.auto_analysis ?? true
   })
   showCreateDialog.value = true
 }
@@ -421,11 +421,31 @@ const submitProject = async () => {
     
     if (editingProject.value) {
       // 更新项目
-      await projectApi.updateProject(editingProject.value.project_key, projectForm as ProjectUpdate)
+      const updateData: ProjectUpdate = {
+        name: projectForm.name,
+        description: projectForm.description,
+        framework: projectForm.framework,
+        base_url: projectForm.base_url,
+        config: {
+          sampling_rate: projectForm.sampling_rate,
+          auto_analysis: projectForm.enable_ai_analysis
+        }
+      }
+      await projectApi.updateProject(editingProject.value.project_key, updateData)
       ElMessage.success('项目更新成功')
     } else {
       // 创建项目
-      await projectApi.createProject(projectForm)
+      const createData: ProjectCreate = {
+        name: projectForm.name,
+        description: projectForm.description,
+        framework: projectForm.framework,
+        base_url: projectForm.base_url,
+        config: {
+          sampling_rate: projectForm.sampling_rate,
+          auto_analysis: projectForm.enable_ai_analysis
+        }
+      }
+      await projectApi.createProject(createData)
       ElMessage.success('项目创建成功')
     }
     
@@ -470,8 +490,8 @@ const resetForm = () => {
   projectFormRef.value?.resetFields()
 }
 
-const getFrameworkTagType = (framework: string) => {
-  const typeMap: Record<string, string> = {
+const getFrameworkTagType = (framework: string): 'success' | 'primary' | 'warning' | 'info' => {
+  const typeMap: Record<string, 'success' | 'primary' | 'warning' | 'info'> = {
     flask: 'success',
     django: 'primary',
     fastapi: 'warning',

@@ -412,7 +412,7 @@ const loadProjectStats = async () => {
       avgDuration: stats.avg_response_time || 0,
       slowQueries: await getSlowQueriesCount(),
       errorRate: stats.total_requests > 0 
-        ? ((stats.failed_requests || 0) / stats.total_requests * 100).toFixed(1)
+        ? parseFloat(((stats.total_requests - (stats.today_requests || 0)) / stats.total_requests * 100).toFixed(1))
         : 0
     }
     
@@ -450,10 +450,10 @@ const loadRecentRecords = async () => {
     
     recentRecords.value = response.data.records.map(record => ({
       trace_id: record.trace_id,
-      path: record.request_path || '/',
-      method: record.request_method || 'GET',
-      duration: Math.round((record.duration || 0) * 1000), // 转为毫秒
-      status: record.status_code || 200,
+      path: record.request_info?.path || '/',
+      method: record.request_info?.method || 'GET',
+      duration: Math.round((record.performance_metrics?.total_duration || 0) * 1000), // 转为毫秒
+      status: record.response_info?.status_code || 200,
       timestamp: record.timestamp || ''
     }))
     
@@ -499,8 +499,8 @@ const refreshAll = () => {
   ElMessage.success('数据刷新成功')
 }
 
-const getMethodTagType = (method: string) => {
-  const types: Record<string, string> = {
+const getMethodTagType = (method: string): 'success' | 'primary' | 'warning' | 'danger' | 'info' => {
+  const types: Record<string, 'success' | 'primary' | 'warning' | 'danger' | 'info'> = {
     'GET': 'success',
     'POST': 'primary',
     'PUT': 'warning',

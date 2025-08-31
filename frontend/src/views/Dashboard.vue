@@ -442,8 +442,8 @@ const loadSystemInfo = async () => {
       uptime: response.data.uptime,
       dbStatus: response.data.db_status,
       redisStatus: response.data.redis_status,
-      cpuUsage: response.data.cpu_usage || 0,
-      memoryUsage: response.data.memory_usage || 0
+      cpuUsage: 0, // API响应中没有cpu_usage字段
+      memoryUsage: 0 // API响应中没有memory_usage字段
     }
   } catch (error) {
     console.error('加载系统信息失败:', error)

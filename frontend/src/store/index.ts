@@ -8,4 +8,3 @@ export default pinia
 export * from './modules/app'
 export * from './modules/project'
 export * from './modules/performance'
-export * from './modules/analysis'
