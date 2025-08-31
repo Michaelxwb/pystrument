@@ -36,6 +36,10 @@
 - **配置管理**: YAML/JSON配置文件
 - **数据传输**: HTTP REST API
 
+## 📚 文档
+
+有关详细的使用说明和开发指南，请参阅 [FINAL_DOCUMENTATION.md](FINAL_DOCUMENTATION.md) 文件。
+
 ## 🚀 快速开始
 
 ### 环境要求
