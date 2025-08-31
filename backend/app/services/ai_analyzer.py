@@ -580,55 +580,59 @@ class PerformanceAnalyzer:
                     bottlenecks = []
                     bottleneck_analysis = result_json.get('bottleneck_analysis', {})
                     
-                    # 处理主要瓶颈
-                    if 'primary_bottleneck' in bottleneck_analysis:
-                        bottlenecks.append(BottleneckAnalysis(
-                            type='primary',
-                            severity='high',
-                            function='unknown',
-                            description=bottleneck_analysis['primary_bottleneck'],
-                            impact=0.9
-                        ))
-                    
-                    # 处理次要瓶颈
-                    if 'secondary_bottleneck' in bottleneck_analysis:
-                        bottlenecks.append(BottleneckAnalysis(
-                            type='secondary',
-                            severity='medium',
-                            function='unknown',
-                            description=bottleneck_analysis['secondary_bottleneck'],
-                            impact=0.7
-                        ))
-                    
-                    # 处理关键问题
-                    key_issues = bottleneck_analysis.get('key_issues', [])
-                    for i, issue in enumerate(key_issues):
-                        bottlenecks.append(BottleneckAnalysis(
-                            type='issue',
-                            severity='medium' if i < 2 else 'low',
-                            function='unknown',
-                            description=issue,
-                            impact=0.5 if i < 2 else 0.3
-                        ))
+                    # 处理主要瓶颈和其他字符串类型的瓶颈字段
+                    for key, value in bottleneck_analysis.items():
+                        if isinstance(value, str):
+                            bottlenecks.append(BottleneckAnalysis(
+                                type=key,
+                                severity='high' if 'primary' in key else 'medium' if 'secondary' in key else 'low',
+                                function='unknown',
+                                description=value,
+                                impact=0.9 if 'primary' in key else 0.7 if 'secondary' in key else 0.5
+                            ))
                     
                     # 解析优化建议 - 适配DeepSeek的返回格式
                     suggestions = []
                     optimization_recommendations = result_json.get('optimization_recommendations', [])
-                    for recommendation in optimization_recommendations:
-                        suggestions.append(OptimizationSuggestion(
-                            category='performance',
-                            priority=recommendation.get('priority', 'medium'),
-                            title=recommendation.get('action', ''),
-                            description=recommendation.get('details', ''),
-                            code_example='',
-                            expected_improvement=''
-                        ))
+                    if isinstance(optimization_recommendations, list):
+                        for recommendation in optimization_recommendations:
+                            if isinstance(recommendation, dict):
+                                suggestions.append(OptimizationSuggestion(
+                                    category='performance',
+                                    priority=recommendation.get('priority', 'medium'),
+                                    title=recommendation.get('action', ''),
+                                    description=recommendation.get('details', ''),
+                                    code_example='',
+                                    expected_improvement=''
+                                ))
                     
                     # 解析风险评估 - 适配DeepSeek的返回格式
                     risk_assessment_data = result_json.get('risk_assessment', {})
-                    current_risks = risk_assessment_data.get('high_risk', [])
-                    potential_issues = risk_assessment_data.get('medium_risk', [])
-                    recommendations = risk_assessment_data.get('low_risk', [])
+                    
+                    # 根据风险级别分类
+                    current_risks = []
+                    potential_issues = []
+                    recommendations = []
+                    
+                    # 处理不同格式的风险评估数据
+                    if isinstance(risk_assessment_data, dict):
+                        # 处理对象格式（包含high_risk, medium_risk, low_risk字段）
+                        current_risks = risk_assessment_data.get('high_risk', [])
+                        potential_issues = risk_assessment_data.get('medium_risk', [])
+                        recommendations = risk_assessment_data.get('low_risk', [])
+                    elif isinstance(risk_assessment_data, list):
+                        # 处理数组格式（每个元素包含risk_level和description字段）
+                        for risk_item in risk_assessment_data:
+                            if isinstance(risk_item, dict):
+                                risk_level = risk_item.get('risk_level', 'low')
+                                description = risk_item.get('description', '')
+                                
+                                if risk_level == 'high':
+                                    current_risks.append(description)
+                                elif risk_level == 'medium':
+                                    potential_issues.append(description)
+                                else:
+                                    recommendations.append(description)
                     
                     risks = RiskAssessment(
                         current_risks=current_risks,

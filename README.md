@@ -53,7 +53,10 @@ cd pystrument
 # 启动所有服务
 docker-compose up -d
 
-# 访问前端界面
+# 访问前端界面 (通过Nginx)
+# http://localhost
+
+# 或者直接访问前端服务
 # http://localhost:3000
 
 # 访问API文档
@@ -92,6 +95,15 @@ npm install
 # 启动开发服务器
 npm run dev
 ```
+
+## 🌐 前端资源代理配置
+
+### 统一环境配置（开发和生产环境一致）
+- 前端资源被打包成独立的Docker镜像
+- Nginx作为反向代理，将请求路由到相应的服务：
+  - `/` 路径请求转发到前端服务
+  - `/api` 路径请求转发到后端服务
+- 静态资源通过gzip压缩和缓存优化
 
 ## 📖 使用指南
 
@@ -142,6 +154,9 @@ pystrument/
 ├── frontend/          # 前端界面
 │   ├── src/           # 源代码
 │   └── package.json
+├── nginx/             # Nginx配置
+│   ├── nginx.conf     # 主配置文件
+│   └── conf.d/        # 站点配置目录
 ├── sdk/               # Python SDK
 ├── docker-compose.yml # Docker编排文件
 └── docs/              # 文档

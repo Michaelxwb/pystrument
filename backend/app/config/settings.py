@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     async_send_timeout: int = 5
     
     # 安全配置
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://localhost"
     max_request_size: int = 10485760  # 10MB
     
     # 日志配置
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
         if self.cors_origins:
             # 分割逗号分隔的字符串并去除空格
             return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
-        return ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8080"]
+        return ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8080", "http://localhost"]
     
     class Config:
         env_file = ".env"

@@ -68,5 +68,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # 启动nginx
 CMD ["nginx", "-g", "daemon off;"]
 
-# 默认使用开发阶段（可通过--target参数指定）
-FROM development
+# 默认使用生产阶段
+FROM production
