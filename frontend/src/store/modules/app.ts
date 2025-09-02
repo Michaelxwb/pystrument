@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 
 export const useAppStore = defineStore('app', () => {
   // 状态
